@@ -1,0 +1,27 @@
+.agents
+skills-lock.json
+
+# Android / Gradle build outputs
+.gradle/
+local.properties
+build/
+app/build/
+*.apk
+*.aab
+*.ap_
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Keystore files (never commit signing keys)
+*.jks
+*.keystore
+
+# Google services (added only when publishing; requires google-services.json setup)
+google-services.json
+
+.github
