@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { CUBE_FACE_COLORS, FACE_COLORS, PLASTIC_COLOR } from '../theme/colors';
 import {
   BaseMove,
   MoveName,
@@ -15,7 +16,7 @@ import {
 } from '../logic/cubeMoves';
 
 export type { GamePhase, MoveName, BaseMove, MoveAnimationInfo, CubeValidationResult };
-export { createSolvedCubeState, validateCubeState, isCubeSolved, ALL_MOVE_NAMES };
+export { createSolvedCubeState, validateCubeState, isCubeSolved, ALL_MOVE_NAMES, CUBE_FACE_COLORS, FACE_COLORS, PLASTIC_COLOR };
 
 export type OrientationPreset = 'yellow-top' | 'white-top' | 'reset';
 
@@ -62,16 +63,6 @@ export interface CubeStoreState {
   triggerOrientationPreset: (preset: OrientationPreset) => void;
 }
 
-export const FACE_COLORS = [
-  '#FFFFFF', // 0: White (Up)
-  '#FFD500', // 1: Yellow (Down)
-  '#B71234', // 2: Red (Right)
-  '#FF5800', // 3: Orange (Left)
-  '#0046AD', // 4: Blue (Front)
-  '#009B48', // 5: Green (Back)
-];
-
-export const PLASTIC_COLOR = '#1A1A1A';
 
 function applyDirectMoveState(state: CubeStoreState, move: MoveName): Partial<CubeStoreState> {
   const nextCubeState = applyMove(state.cubeState, move);

@@ -4,6 +4,7 @@ import { Canvas, ThreeEvent, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { CubeGroup } from './CubeGroup';
 import { useCubeStore } from '../store/useCubeStore';
+import { colors } from '../theme/colors';
 import {
   getFaceTangents,
   resolveFaceDragMove,
@@ -218,7 +219,7 @@ export const CubeCanvas: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121214',
+    backgroundColor: colors.background.primary,
     ...(Platform.OS === 'web' ? ({ touchAction: 'none', userSelect: 'none' } as any) : {}),
   },
   canvas: {

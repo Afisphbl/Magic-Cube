@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ThreeEvent } from '@react-three/fiber';
-import { FACE_COLORS, PLASTIC_COLOR } from '../store/useCubeStore';
+import { FACE_COLORS, PLASTIC_COLOR } from '../theme/colors';
 import { getStickerIndex } from '../logic/cubeMoves';
 
 interface CubieProps {

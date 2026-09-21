@@ -14,7 +14,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 1 | Stack and architecture | Foundation | done |
 | 2 | Coding standards and tooling | Foundation | done |
 | 3 | Cube data model and state machine | Foundation | done |
-| 4 | Design system and UI foundation | Foundation | planned |
+| 4 | Design system and UI foundation | Foundation | done |
 | 5 | 3D cube renderer and interaction | Slice 1 | planned |
 | 6 | Scramble engine | Slice 2 | planned |
 | 7 | Solve timer and move counter | Slice 3 | planned |
@@ -54,10 +54,18 @@ Core data structure representing a 3x3 Rubik's Cube: the 54 sticker state, the 1
 - [x] Verify it: `/check verify cube data model and state machine`
 - [x] Test it: `/test cube data model and state machine`
 
-### 4. Design system and UI foundation · needs a decision
+### 4. Design system and UI foundation · done
 Visual language, colors, typography, spacing, and base components so every screen feels cohesive. For a puzzle game this includes the color palette for the six cube face colors, the background, and button styles.
 **Done when:** a `design.md` covers colors, typography, spacing, and cube face palette; base components handle the primary button and screen layout and are accessible.
-- [ ] Design it (spec): `/architect design system and UI foundation`
+- [x] Design it (spec): `/architect design system and UI foundation`
+  spec [0004](../specs/0004-design-system-and-ui-foundation/index.md) · code in `src/theme/`, `src/components/ui/`
+- [x] Build it: `/develop design system and UI foundation`
+  - [x] Package setup and design tokens: colors, typography, spacing, and opacity (AC-1, AC-2, AC-3)
+  - [x] Base components: ThemedText, ThemedButton, ThemedCard, and StatBadge (AC-4, AC-5, AC-6, AC-7)
+  - [x] Screen layout and cube integration: ScreenContainer and useCubeStore face colors (AC-1, AC-8)
+  - [x] Living documentation: design.md with swatches, typography scale, and component catalog (AC-9)
+- [x] Verify it: `/check verify design system and UI foundation`
+- [x] Test it: `/test design system and UI foundation`
 
 ## Slice 1: Core loop
 

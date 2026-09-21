@@ -62,6 +62,7 @@ npm run test:e2e
 - Pure game logic and move permutations live in `src/logic/` with unit tests in `test/`.
 - Use TypeScript strict types for all move definitions and state structures.
 - Scene interactions use React Three Fiber pointer events on cubie meshes and background sphere.
+- Design system: build all UI to `docs/design.md` (art direction and the maximalist product bar); token values live in `src/theme/`.
 
 ## Agent skills
 
