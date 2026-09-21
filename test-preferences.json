@@ -1,0 +1,9 @@
+{
+  "tool": "node:test",
+  "gate": null,
+  "additionalTools": ["@testing-library/react-native"],
+  "e2eTool": "playwright",
+  "testDir": "test",
+  "filePattern": "*.test.*",
+  "packageManager": "npm"
+}

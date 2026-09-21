@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!--
-        Theme.MagicCube: Material 3 Dynamic Color (adapts to device wallpaper on Android 12+).
-        Falls back to the seed color below on older devices.
-    -->
-    <style name="Theme.MagicCube" parent="Theme.Material3.DynamicColors.DayNight" />
-</resources>

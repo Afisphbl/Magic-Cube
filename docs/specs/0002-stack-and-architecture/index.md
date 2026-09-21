@@ -1,7 +1,7 @@
 # 0002. Stack and Architecture (Expo + React Native)
 
 **Date**: 2026-09-19
-**Status**: Proposed
+**Status**: Accepted
 
 ## Summary
 
@@ -36,7 +36,7 @@ The Magic Cube app is built as an Expo managed workflow project using TypeScript
 | Testing | Jest + React Native Testing Library | Default Expo test setup; Jest unit tests cover the cube state machine (54-sticker array, 18 legal moves, solved detection) with no renderer; RNTL tests cover UI components |
 | CI | GitHub Actions | Free; `setup-node` + `npx expo install --check` + `jest` + `eslint` covers the full check pipeline without needing a device |
 | Observability | Console logging in development; no crash reporting in MVP | Offline casual game with no backend; add Sentry or Crashlytics before publishing |
-| Min SDK | Android 7.0 (API 24) via Expo SDK 51+ | Same coverage target as spec 0001; OpenGL ES 3.x is available on all API 24+ devices |
+| Min SDK | Android 7.0 (API 24) via Expo SDK 54+ | Same coverage target as spec 0001; Expo 54 with React 19, React Native 0.81.5, and R3F v9 |
 | Development target | Browser first (`npx expo start --web`) then Android Development Build | Browser development requires no USB or native toolchain; Development Build is compiled once for on-device testing |
 
 

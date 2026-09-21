@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Magic Cube",
+    "slug": "magic-cube",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "magiccube",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.magiccube.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-asset"
+    ]
+  }
+}

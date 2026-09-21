@@ -11,7 +11,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 
 | # | Feature | Phase | Status |
 |---|---------|-------|--------|
-| 1 | Stack and architecture | Foundation | in-progress |
+| 1 | Stack and architecture | Foundation | done |
 | 2 | Coding standards and tooling | Foundation | planned |
 | 3 | Cube data model and state machine | Foundation | planned |
 | 4 | Design system and UI foundation | Foundation | planned |
@@ -21,19 +21,19 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 
 ## Foundations
 
-### 1. Stack and architecture · in-progress
+### 1. Stack and architecture · done
 Decide the Expo and React Native stack and scaffold a runnable project so every later slice builds on real structure. Rendering: Three.js via `@react-three/fiber` and `expo-gl`. No Android Studio required. Develop in the browser; compile a Development Build once for on-device testing.
 **Done when:** the stack is recorded in a spec, the empty scaffold boots in the browser and on a real Android phone via a Development Build, and the build passes.
 - [x] Decide the stack (spec): `/architect stack and architecture`
-  spec [0002](../specs/0002-stack-and-architecture/index.md)
-- [ ] Build it: `/develop stack and architecture`
-  - [ ] Scaffold the Expo managed workflow project with TypeScript and Expo Router
-  - [ ] Add @react-three/fiber, expo-gl, and render a placeholder cube in the browser
-  - [ ] Add Zustand store with the 54-element cube state shape
-  - [ ] Add gesture handler and reanimated; wire orbit and face-rotate gestures
-  - [ ] Confirm Development Build boots on a physical Android device
-- [ ] Verify it: `/check verify stack and architecture`
-- [ ] Test it: `/test stack and architecture`
+  spec [0002](../specs/0002-stack-and-architecture/index.md) · code in `app/`, `src/`
+- [x] Build it: `/develop stack and architecture`
+  - [x] Scaffold the Expo managed workflow project with TypeScript and Expo Router
+  - [x] Add @react-three/fiber, expo-gl, and render a placeholder cube in the browser
+  - [x] Add Zustand store with the 54-element cube state shape
+  - [x] Add gesture handler and reanimated; wire orbit and face-rotate gestures
+  - [x] Confirm Development Build boots on a physical Android device
+- [x] Verify it: `/check verify stack and architecture`
+- [x] Test it: `/test stack and architecture`
 
 ### 2. Coding standards and tooling
 Capture coding conventions, then install lint, format, and type checking enforcement from the real scaffolded project.
