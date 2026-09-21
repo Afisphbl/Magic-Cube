@@ -15,7 +15,7 @@ interface CubieProps {
   ) => void;
 }
 
-export const Cubie: React.FC<CubieProps> = React.memo(({ x, y, z, cubeState, onPointerDown }) => {
+export const Cubie: React.FC<CubieProps> = React.memo(function Cubie({ x, y, z, cubeState, onPointerDown }) {
   const colors = useMemo(() => {
     // 0: +X (Right), 1: -X (Left), 2: +Y (Up), 3: -Y (Down), 4: +Z (Front), 5: -Z (Back)
     const result: string[] = [];
@@ -99,3 +99,5 @@ export const Cubie: React.FC<CubieProps> = React.memo(({ x, y, z, cubeState, onP
     </mesh>
   );
 });
+
+Cubie.displayName = 'Cubie';

@@ -91,7 +91,7 @@ The Zustand store holds: `cubeState` (`number[]` of 54 values), `timerMs` (`numb
 
 ## Follow-up
 
-- [ ] Run `/audit` after the scaffold is created to capture the real Expo and React Native conventions into root `AGENTS.md`
+- [x] Run `/audit` after the scaffold is created to capture the real Expo and React Native conventions into root `AGENTS.md`
 - [ ] Add crash reporting (Sentry or Crashlytics) before publishing the app to the Play Store
 - [ ] When ready to test on device, install Android SDK build tools: `sdkmanager "build-tools;35.0.0" "platforms;android-35"` (does not require Android Studio IDE)
 - [ ] Evaluate adding `AsyncStorage` when personal best statistics are scoped (Feature 7 follow-up)

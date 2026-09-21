@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "node --import ./test/register.mjs --test test/*.test.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "lint": "expo lint"
   },
   "dependencies": {
     "@react-three/fiber": "^9.0.0",
@@ -39,6 +40,8 @@
     "@testing-library/react-native": "^14.0.1",
     "@types/react": "~19.1.10",
     "@types/three": "^0.170.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~10.0.0",
     "typescript": "^5.8.2"
   },
   "private": true

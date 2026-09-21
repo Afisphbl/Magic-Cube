@@ -12,8 +12,8 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | # | Feature | Phase | Status |
 |---|---------|-------|--------|
 | 1 | Stack and architecture | Foundation | done |
-| 2 | Coding standards and tooling | Foundation | planned |
-| 3 | Cube data model and state machine | Foundation | planned |
+| 2 | Coding standards and tooling | Foundation | done |
+| 3 | Cube data model and state machine | Foundation | done |
 | 4 | Design system and UI foundation | Foundation | planned |
 | 5 | 3D cube renderer and interaction | Slice 1 | planned |
 | 6 | Scramble engine | Slice 2 | planned |
@@ -35,17 +35,24 @@ Decide the Expo and React Native stack and scaffold a runnable project so every 
 - [x] Verify it: `/check verify stack and architecture`
 - [x] Test it: `/test stack and architecture`
 
-### 2. Coding standards and tooling
+### 2. Coding standards and tooling · done
 Capture coding conventions, then install lint, format, and type checking enforcement from the real scaffolded project.
 **Done when:** root `AGENTS.md` reflects the real Expo and React Native stack, and lint and format run clean.
-- [ ] Capture conventions and tooling choices: `/audit`
-- [ ] Install the tooling: `/develop tooling`
-- [ ] Check it runs clean: `/test`
+- [x] Capture conventions and tooling choices: `/audit`
+- [x] Install the tooling: `/develop tooling`
+- [x] Check it runs clean: `/test`
 
-### 3. Cube data model and state machine · needs a decision
+### 3. Cube data model and state machine · done
 Core data structure representing a 3x3 Rubik's Cube: the 54 sticker state, the 18 legal face moves (U, D, L, R, F, B and their inverses and double turns), and the solved state detection. This is the costliest thing to get wrong; a bad model breaks every feature built on it.
 **Done when:** any sequence of moves applied to a solved cube produces the correct resulting state; solved detection is correct; unit tests cover every move and solved check.
-- [ ] Design it (spec): `/architect cube data model and state machine`
+- [x] Design it (spec): `/architect cube data model and state machine`
+  spec [0003](../specs/0003-cube-data-model-and-state-machine/index.md) · code in `src/logic/cubeMoves.ts`, `src/store/useCubeStore.ts`
+- [x] Build it: `/develop cube data model and state machine`
+  - [x] Pure logic: color conservation validator, animation parameters, and game phase transitions (AC-1, AC-4, AC-6)
+  - [x] Store state: move history, scramble queue, and single move input buffer (AC-4, AC-5, AC-7, AC-8)
+  - [x] Execution mechanics: direct move actions and atomic animation chaining (AC-5, AC-8)
+- [x] Verify it: `/check verify cube data model and state machine`
+- [x] Test it: `/test cube data model and state machine`
 
 ### 4. Design system and UI foundation · needs a decision
 Visual language, colors, typography, spacing, and base components so every screen feels cohesive. For a puzzle game this includes the color palette for the six cube face colors, the background, and button styles.

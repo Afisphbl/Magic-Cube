@@ -1,165 +1,82 @@
-# Magic Cube — AGENTS.md
+# Magic Cube: AGENTS.md
 
 AI agent context for the Magic Cube project. Read this before touching any code.
-Update it only via `/sync` after a feature lands or `/audit` after the first scaffold build.
+Update it only via `/sync` after a feature lands or `/audit` after a scaffold build.
 
 ## Project
 
-A native Android Rubik's Cube puzzle game for casual players.
-Offline only. No account. No backend. No ads.
+A mobile Rubik's Cube puzzle game for casual players, built with Expo and React Native.
+Offline only. No account. No backend.
 Source of truth for the product plan: `docs/scope/scope.md`.
+
+## Build approach
+
+Tracer Bullet (prove the render, cube state, and interaction loop end to end in one real working slice, then thicken each segment).
 
 ## Stack
 
-| Layer | Choice | Version / notes |
+| Layer | Choice | Version or notes |
 |---|---|---|
-| Language | Kotlin (JVM) | 2.0.x |
-| UI framework | Jetpack Compose | via Compose BOM 2024.12.01 |
-| 3D rendering | SceneView + Google Filament | 4.37.0 (Maven Central) |
-| State | ViewModel + StateFlow + SavedStateHandle | Jetpack lifecycle 2.8.x |
-| Navigation | Jetpack Navigation for Compose | 2.8.x |
-| Persistence | None (SavedStateHandle only) | No Room in MVP |
-| Build system | Gradle with Kotlin DSL | `build.gradle.kts` everywhere |
-| Min SDK | Android 7.0 | API 24 |
-| Target SDK | Android 35 | |
-| Code quality | ktlint | via Gradle plugin; run `./gradlew ktlintCheck` |
-| Testing | JUnit 5 + Robolectric | `useJUnitPlatform()` in app module |
-| CI | GitHub Actions | `.github/workflows/android.yml` |
+| Language | TypeScript | 5.8 |
+| Framework | Expo (managed workflow) + React Native | Expo SDK 54, React Native 0.81.5, React 19 |
+| 3D rendering | Three.js via @react-three/fiber + expo-gl | Three 0.170, R3F 9.0, expo-gl 16.0 |
+| State | Zustand | 5.0 |
+| Navigation | Expo Router (file based) | 6.0 |
+| Testing | Node test runner + React Native Testing Library | `test/*.test.mjs` |
+| Code quality | ESLint + TypeScript check | expo lint, tsc --noEmit |
 
-Spec: `docs/specs/0001-stack-and-architecture/index.md`
+Spec: `docs/specs/0002-stack-and-architecture/index.md`
 
-## Architecture
-
-**One Activity, one NavHost.**
-`MainActivity` → `setContent { MagicCubeApp() }` → `NavHost` with `game` route.
-
-**Logical cube state is fully separated from the 3D renderer.**
-- The cube state (54-element `IntArray` of face colors, values 0–5) lives in a `ViewModel`.
-- The SceneView composable is a pure function of that array: reads state, updates node materials, never writes back.
-- All business logic (cube state machine, timer, move count) is testable with JUnit 5 and no device.
-
-**Saved state contract (process death survival):**
-`SavedStateHandle` keys: `"cube_state"` (`IntArray`), `"timer_ms"` (`Long`), `"move_count"` (`Int`), `"game_phase"` (`String`: `SOLVED` | `SCRAMBLING` | `PLAYING`).
-
-**3D asset pipeline:**
-Cube geometry is generated programmatically in Kotlin using SceneView's node and mesh API.
-26 cubie meshes at runtime. No GLTF or OBJ files.
-`blender/magic_cube_prototype.py` is a visual reference only; it is never loaded by the app.
-
-**Gesture model:**
-`pointerInput` on the SceneView composable → ray cast on touch down to identify cubie face →
-drag vector in screen space mapped to closest legal face rotation axis on drag.
-All scene graph mutations on the main thread (SceneView requirement).
-
-**Animation:**
-`Animatable<Float>` per in-flight face rotation. `LaunchedEffect` maps angle to SceneView node quaternion.
-Duration 250 ms with `FastOutSlowInEasing`. Scramble moves snap (no animation) for speed.
-
-**DI:** Manual constructor injection. No DI framework.
-
-## Directory layout
-
-```
-MagicCube/
-  app/
-    src/
-      main/
-        java/com/example/magiccube/
-          MainActivity.kt
-          ui/
-            MagicCubeApp.kt          ← NavHost root
-            game/
-              GameScreen.kt          ← game screen composable (placeholder → real in Feature 5)
-              GameViewModel.kt       ← (added in Feature 3 / Feature 5)
-        res/
-          values/
-            themes.xml
-            colors.xml
-            strings.xml
-        AndroidManifest.xml
-      test/
-        java/com/example/magiccube/
-          ExampleUnitTest.kt
-    build.gradle.kts
-  blender/
-    magic_cube_prototype.py          ← visual reference only
-  docs/
-    scope/scope.md
-    specs/
-      0001-stack-and-architecture/
-        index.md
-        rationale.md
-  .github/
-    workflows/
-      android.yml
-  settings.gradle.kts
-  build.gradle.kts
-  gradle.properties
-  gradle/
-    libs.versions.toml
-  AGENTS.md                          ← this file
-```
-
-## Build commands
+## Commands
 
 ```bash
-# Assemble debug APK
-./gradlew assembleDebug
+# Start dev server
+npm start
 
-# Run unit tests
-./gradlew test
+# Dev server in browser
+npm run web
 
-# Lint check (ktlint)
-./gradlew ktlintCheck
+# Dev server for Android
+npm run android
 
-# Auto-fix lint
-./gradlew ktlintFormat
+# Dev server for iOS
+npm run ios
 
-# Install on connected device / emulator
-./gradlew installDebug
+# Lint check
+npm run lint
+
+# Type check
+npm run typecheck
+
+# Unit tests
+npm test
+
+# End to end tests
+npm run test:e2e
 ```
 
-Gradle wrapper (`gradlew`) is the canonical entry point. Never call `gradle` directly.
+## Rules
 
-## Code conventions
-
-- **Kotlin style**: follow the official Kotlin style guide, enforced by ktlint.
-- **Package root**: `com.example.magiccube`
-- **No hardcoded strings** in composables — use `stringResource` + `strings.xml`.
-- **No 3D code outside the SceneView composable.** The ViewModel must not import SceneView.
-- **ViewModel per screen**, not shared across screens.
-- **State hoisting**: state lives in the ViewModel, composables are stateless functions of it.
-- **Coroutines**: use `viewModelScope` for anything async in the ViewModel.
-- **`IntArray` face colors**: values 0–5 map to White, Yellow, Red, Orange, Blue, Green (standard Rubik's colors).
-
-## Git
-
-integration: off
-(No active git branching by agents yet. Run `/sync` after each feature to update AGENTS.md.)
+- Keep logical cube state in the Zustand store (`src/store/useCubeStore.ts`).
+- The 3D scene reads cube state; it never mutates it directly.
+- Pure game logic and move permutations live in `src/logic/` with unit tests in `test/`.
+- Use TypeScript strict types for all move definitions and state structures.
+- Scene interactions use React Three Fiber pointer events on cubie meshes and background sphere.
 
 ## Agent skills
 
 Skills installed for this project (`.agents/skills/`):
+- [/architect](.agents/skills/architect/): design a feature and write a spec
+- [/develop](.agents/skills/develop/): build from a spec
+- [/check](.agents/skills/check/): verify behavior or review code
+- [/test](.agents/skills/test/): write tests
+- [/scope](.agents/skills/scope/): manage product scope
+- [/sync](.agents/skills/sync/): update AGENTS.md after feature lands
+- [/audit](.agents/skills/audit/): bootstrap AI context
+- [/debug](.agents/skills/debug/): root cause and fix bugs
+- [/document](.agents/skills/document/): write release notes or changelogs
+- [expo-router](.agents/skills/expo-router/): navigation and routing for Expo Router
 
-- `/architect` — design a feature, write a spec. Path: `.agents/skills/architect/`
-- `/develop` — build from a spec. Path: `.agents/skills/develop/`
-- `/check` — verify or review. Path: `.agents/skills/check/`
-- `/test` — write tests. Path: `.agents/skills/test/`
-- `/scope` — manage the product plan. Path: `.agents/skills/scope/`
-- `/sync` — update AGENTS.md after a feature lands. Path: `.agents/skills/sync/`
-- `/audit` — bootstrap AI context for an area. Path: `.agents/skills/audit/`
-- `/debug` — root-cause and fix a bug. Path: `.agents/skills/debug/`
-- `/document` — write PR/changelog/release notes. Path: `.agents/skills/document/`
+## Context files
 
-## Specs
-
-| # | Feature | Status | Spec |
-|---|---|---|---|
-| 0001 | Stack and architecture | Accepted | `docs/specs/0001-stack-and-architecture/index.md` |
-
-## Open follow-ups (from spec 0001)
-
-- Run `/audit` after the scaffold is verified to install ktlint and GitHub Actions properly and reconcile this AGENTS.md with the real project layout.
-- Add Crashlytics (Firebase) only when publishing; it requires `google-services.json`.
-- Revisit detekt if code quality signals worsen.
-- Evaluate Kotlin Multiplatform (KMP) when iOS support is scoped.
+_Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

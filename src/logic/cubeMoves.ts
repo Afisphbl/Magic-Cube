@@ -9,10 +9,68 @@ export type MoveName =
   | 'F' | "F'" | 'F2'
   | 'B' | "B'" | 'B2';
 
+export type GamePhase = 'SOLVED' | 'SCRAMBLING' | 'PLAYING';
+
+export const ALL_MOVE_NAMES: MoveName[] = [
+  'U', "U'", 'U2',
+  'D', "D'", 'D2',
+  'L', "L'", 'L2',
+  'R', "R'", 'R2',
+  'F', "F'", 'F2',
+  'B', "B'", 'B2',
+];
+
 export interface MoveAnimationInfo {
   axis: [number, number, number];
   angle: number; // in radians
+  durationMs: number;
+  easing: string;
   filter: (c: [number, number, number]) => boolean;
+}
+
+export interface CubeValidationResult {
+  valid: boolean;
+  error?: string;
+}
+
+export function createSolvedCubeState(): number[] {
+  const state = new Array<number>(54);
+  for (let face = 0; face < 6; face++) {
+    for (let sticker = 0; sticker < 9; sticker++) {
+      state[face * 9 + sticker] = face;
+    }
+  }
+  return state;
+}
+
+export function restoreSolvedCubeState(): number[] {
+  return createSolvedCubeState();
+}
+
+export function validateCubeState(state: number[]): CubeValidationResult {
+  if (!Array.isArray(state)) {
+    return { valid: false, error: 'Cube state must be an array' };
+  }
+  if (state.length !== 54) {
+    return { valid: false, error: `Cube state must have exactly 54 stickers, got ${state.length}` };
+  }
+  const counts = [0, 0, 0, 0, 0, 0];
+  for (let i = 0; i < 54; i++) {
+    const val = state[i];
+    if (typeof val !== 'number' || !Number.isInteger(val) || val < 0 || val > 5) {
+      return { valid: false, error: `Invalid sticker color value ${val} at index ${i}` };
+    }
+    counts[val]++;
+  }
+  for (let c = 0; c < 6; c++) {
+    if (counts[c] !== 9) {
+      return {
+        valid: false,
+        error: `Color distribution invariant violated: color ${c} has ${counts[c]} stickers (expected 9)`,
+      };
+    }
+  }
+  return { valid: true };
 }
 
 export function getStickerIndex(faceIndex: number, x: number, y: number, z: number): number {
@@ -134,7 +192,7 @@ function invertPerm(p: number[]): number[] {
 function combinePerm(p1: number[], p2: number[]): number[] {
   const res = new Array<number>(54);
   for (let i = 0; i < 54; i++) {
-    res[i] = p2[p1[i]];
+    res[i] = p1[p2[i]];
   }
   return res;
 }
@@ -158,7 +216,12 @@ const MOVE_PERMUTATIONS: Record<MoveName, number[]> = (() => {
 
 export function applyMove(state: number[], move: MoveName): number[] {
   const perm = MOVE_PERMUTATIONS[move];
-  if (!perm) return state;
+  if (!perm) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(`[applyMove] Unknown or unsupported move name: "${move}". Returning unchanged state.`);
+    }
+    return state;
+  }
   const next = new Array<number>(54);
   for (let i = 0; i < 54; i++) {
     next[i] = state[perm[i]];
@@ -167,16 +230,29 @@ export function applyMove(state: number[], move: MoveName): number[] {
 }
 
 export function isCubeSolved(state: number[]): boolean {
+  if (!state || state.length !== 54) return false;
+  let seenMask = 0;
   for (let f = 0; f < 6; f++) {
     const faceColor = state[f * 9];
+    if (typeof faceColor !== 'number' || !Number.isInteger(faceColor) || faceColor < 0 || faceColor > 5) {
+      return false;
+    }
+    const bit = 1 << faceColor;
+    if ((seenMask & bit) !== 0) return false;
+    seenMask |= bit;
+    const offset = f * 9;
     for (let s = 1; s < 9; s++) {
-      if (state[f * 9 + s] !== faceColor) return false;
+      if (state[offset + s] !== faceColor) return false;
     }
   }
   return true;
 }
 
-export function getMoveAnimationInfo(move: MoveName): MoveAnimationInfo {
+export function getMoveAnimationInfo(
+  move: MoveName,
+  durationMs = 250,
+  easing = 'ease-out'
+): MoveAnimationInfo {
   const base = move[0] as BaseMove;
   const def = BASE_MOVE_DEFS[base];
   let angle = def.angle;
@@ -188,8 +264,34 @@ export function getMoveAnimationInfo(move: MoveName): MoveAnimationInfo {
   return {
     axis: def.axis,
     angle,
+    durationMs,
+    easing,
     filter: def.filter,
   };
+}
+
+export function getNextGamePhase(
+  currentPhase: GamePhase,
+  isSolved: boolean,
+  hasPendingMoves = false,
+  isScrambling = false
+): GamePhase {
+  if (isScrambling) {
+    return 'SCRAMBLING';
+  }
+  if (currentPhase === 'SCRAMBLING') {
+    return hasPendingMoves ? 'SCRAMBLING' : (isSolved ? 'SOLVED' : 'PLAYING');
+  }
+  if (hasPendingMoves) {
+    return currentPhase === 'SOLVED' ? 'PLAYING' : currentPhase;
+  }
+  if (currentPhase === 'PLAYING') {
+    return isSolved ? 'SOLVED' : 'PLAYING';
+  }
+  if (currentPhase === 'SOLVED') {
+    return isSolved ? 'SOLVED' : 'PLAYING';
+  }
+  return currentPhase;
 }
 
 function cross(a: [number, number, number], b: [number, number, number]): [number, number, number] {
@@ -258,4 +360,3 @@ export function resolveFaceDragMove(
 
   return null;
 }
-
