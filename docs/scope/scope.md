@@ -15,7 +15,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 2 | Coding standards and tooling | Foundation | done |
 | 3 | Cube data model and state machine | Foundation | done |
 | 4 | Design system and UI foundation | Foundation | done |
-| 5 | 3D cube renderer and interaction | Slice 1 | planned |
+| 5 | 3D cube renderer and interaction | Slice 1 | done |
 | 6 | Scramble engine | Slice 2 | planned |
 | 7 | Solve timer and move counter | Slice 3 | planned |
 
@@ -69,10 +69,18 @@ Visual language, colors, typography, spacing, and base components so every scree
 
 ## Slice 1: Core loop
 
-### 5. 3D cube renderer and interaction · needs a decision
+### 5. 3D cube renderer and interaction · done
 Render the solved 3x3 cube in 3D on screen using Three.js via react-three-fiber and expo-gl. The player can rotate the whole cube with a swipe gesture to inspect it from any angle, and tap or swipe a face to rotate that face by 90 degrees. This is the walking skeleton: the one real working thread proving the stack connects. No scramble, no timer yet.
 **Done when:** a solved cube renders in 3D; whole-cube rotation via swipe works on a real Android phone; a face rotation move applies correctly and the sticker colors update; the cube state after any sequence of moves matches the data model.
-- [ ] Design it (spec): `/architect 3D cube renderer and interaction`
+- [x] Design it (spec): `/architect 3D cube renderer and interaction`
+  spec [0005](../specs/0005-3d-cube-renderer-and-interaction/index.md) · code in `src/components/`, `src/logic/`
+- [x] Build it: `/develop 3D cube renderer and interaction`
+  - [x] 3D scene visual structure, lighting, and responsive camera framing (AC-3, AC-7)
+  - [x] Whole cube orbit rotation with world axis mapping and exponential damping (AC-1, AC-8)
+  - [x] Face drag gesture resolution, primary pointer locking, and 18-point threshold (AC-2)
+  - [x] Slice rotation animation loop, state synchronization, input buffering, and haptics (AC-3, AC-4, AC-5, AC-6)
+- [x] Verify it: `/check verify 3D cube renderer and interaction`
+- [x] Test it: `/test 3D cube renderer and interaction`
 
 ## Slice 2: Scramble
 

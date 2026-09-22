@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { useFrame, ThreeEvent } from '@react-three/fiber';
 import { Cubie } from './Cubie';
 import { useCubeStore } from '../store/useCubeStore';
+import { triggerHapticFeedback } from '../logic/haptics';
 
 const CUBIE_COORDINATES: [number, number, number][] = [];
 for (const x of [-1, 0, 1]) {
@@ -15,7 +16,7 @@ for (const x of [-1, 0, 1]) {
 }
 
 interface CubeGroupProps {
-  targetQuaternion: THREE.Quaternion;
+  targetQuaternion: THREE.Quaternion | React.RefObject<THREE.Quaternion>;
   onCubiePointerDown?: (
     e: ThreeEvent<PointerEvent>,
     coords: [number, number, number],
@@ -63,9 +64,12 @@ export const CubeGroup: React.FC<CubeGroupProps> = ({
 
   useFrame((_, delta) => {
     if (groupRef.current) {
+      const target = 'current' in targetQuaternion && targetQuaternion.current
+        ? targetQuaternion.current
+        : (targetQuaternion as THREE.Quaternion);
       // Smooth frame-rate-independent rotation tracking
       const damping = 1 - Math.exp(-18 * delta);
-      groupRef.current.quaternion.slerp(targetQuaternion, damping);
+      groupRef.current.quaternion.slerp(target, damping);
     }
 
     if (animatingMove) {
@@ -105,6 +109,7 @@ export const CubeGroup: React.FC<CubeGroupProps> = ({
           }
         }
         finishMoveAnimation();
+        triggerHapticFeedback();
       }
     }
   });

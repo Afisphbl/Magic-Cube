@@ -25,6 +25,9 @@ export async function resolve(specifier, context, nextResolve) {
   if (specifier === 'react-native-safe-area-context') {
     return nextResolve(pathToFileURL(path.resolve('./test/mocks/safe-area-context.mjs')).href, context);
   }
+  if (specifier === 'expo-haptics') {
+    return nextResolve(pathToFileURL(path.resolve('./test/mocks/expo-haptics.mjs')).href, context);
+  }
   try {
     return await nextResolve(specifier, context);
   } catch (err) {

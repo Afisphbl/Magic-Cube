@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import { View, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { Canvas, ThreeEvent, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -37,11 +37,9 @@ export const CubeCanvas: React.FC = () => {
   const { width, height } = useWindowDimensions();
   const initialDistance = width && height ? getCameraDistance(width, height) : 6.8;
 
-  const [targetQuat, setTargetQuat] = useState<THREE.Quaternion>(() => DEFAULT_QUATERNION.clone());
+  const targetQuatRef = useRef<THREE.Quaternion>(DEFAULT_QUATERNION.clone());
   const currentQuatRef = useRef<THREE.Quaternion>(DEFAULT_QUATERNION.clone());
 
-  const isAnimating = useCubeStore((state) => state.isAnimating);
-  const startMoveAnimation = useCubeStore((state) => state.startMoveAnimation);
   const viewPresetTrigger = useCubeStore((state) => state.viewPresetTrigger);
 
   // Sync orientation when preset is triggered from UI
@@ -56,8 +54,11 @@ export const CubeCanvas: React.FC = () => {
       return;
     }
     currentQuatRef.current.copy(nextQuat);
-    setTargetQuat(nextQuat.clone());
+    targetQuatRef.current.copy(nextQuat);
   }, [viewPresetTrigger]);
+
+  // Primary pointer locking (AC-2, AC-5)
+  const activePointerIdRef = useRef<number | null>(null);
 
   // Orbit drag tracking
   const isOrbitingRef = useRef<boolean>(false);
@@ -70,9 +71,12 @@ export const CubeCanvas: React.FC = () => {
     startScreen: { x: number; y: number };
   } | null>(null);
 
-
   // Pointer event handlers
   const handleBackgroundPointerDown = useCallback((e: any) => {
+    if (activePointerIdRef.current !== null && e.pointerId !== undefined && activePointerIdRef.current !== e.pointerId) {
+      return;
+    }
+    activePointerIdRef.current = e.pointerId ?? 1;
     pointerOriginRef.current = { x: e.clientX, y: e.clientY };
     isOrbitingRef.current = true;
     faceDragRef.current = null;
@@ -89,8 +93,14 @@ export const CubeCanvas: React.FC = () => {
   ) => {
     e.stopPropagation();
 
+    // Check if another pointer is already active
+    if (activePointerIdRef.current !== null && e.pointerId !== undefined && activePointerIdRef.current !== e.pointerId) {
+      return;
+    }
+
     // Right-click or middle-click: Orbit
     if (e.button === 2 || e.button === 1) {
+      activePointerIdRef.current = e.pointerId ?? 1;
       pointerOriginRef.current = { x: e.clientX, y: e.clientY };
       isOrbitingRef.current = true;
       faceDragRef.current = null;
@@ -102,8 +112,10 @@ export const CubeCanvas: React.FC = () => {
     }
 
     // Left-click: Face rotation gesture
-    if (isAnimating) return;
+    // Reject touch down when an animation is active to prevent raycasting tilted meshes (AC-5)
+    if (useCubeStore.getState().isAnimating) return;
 
+    activePointerIdRef.current = e.pointerId ?? 1;
     faceDragRef.current = {
       cubieCoord: coords,
       normal,
@@ -113,9 +125,13 @@ export const CubeCanvas: React.FC = () => {
       const target = e.nativeEvent?.target as HTMLElement | undefined;
       target?.setPointerCapture?.(e.pointerId);
     }
-  }, [isAnimating]);
+  }, []);
 
   const handleGlobalPointerMove = useCallback((e: any) => {
+    if (activePointerIdRef.current !== null && e.pointerId !== undefined && e.pointerId !== activePointerIdRef.current) {
+      return;
+    }
+
     // 1. Orbit handling
     if (isOrbitingRef.current && pointerOriginRef.current) {
       const dx = e.clientX - pointerOriginRef.current.x;
@@ -128,12 +144,12 @@ export const CubeCanvas: React.FC = () => {
       const deltaQuat = new THREE.Quaternion().multiplyQuaternions(rotX, rotY);
 
       currentQuatRef.current.premultiply(deltaQuat);
-      setTargetQuat(currentQuatRef.current.clone());
+      targetQuatRef.current.copy(currentQuatRef.current);
       return;
     }
 
     // 2. Face swipe handling
-    if (faceDragRef.current && !isAnimating) {
+    if (faceDragRef.current && !useCubeStore.getState().isAnimating) {
       const dx = e.clientX - faceDragRef.current.startScreen.x;
       const dy = e.clientY - faceDragRef.current.startScreen.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -164,15 +180,19 @@ export const CubeCanvas: React.FC = () => {
 
         const move = resolveFaceDragMove(normal, cubieCoord, chosenTangent);
         if (move) {
-          startMoveAnimation(move);
+          useCubeStore.getState().requestMove(move);
         }
 
         faceDragRef.current = null;
       }
     }
-  }, [isAnimating, startMoveAnimation]);
+  }, []);
 
-  const handleGlobalPointerUp = useCallback(() => {
+  const handleGlobalPointerUp = useCallback((e?: any) => {
+    if (e && activePointerIdRef.current !== null && e.pointerId !== undefined && e.pointerId !== activePointerIdRef.current) {
+      return;
+    }
+    activePointerIdRef.current = null;
     isOrbitingRef.current = false;
     faceDragRef.current = null;
     pointerOriginRef.current = null;
@@ -208,7 +228,7 @@ export const CubeCanvas: React.FC = () => {
         </mesh>
 
         <CubeGroup
-          targetQuaternion={targetQuat}
+          targetQuaternion={targetQuatRef}
           onCubiePointerDown={handleCubiePointerDown}
         />
       </Canvas>
