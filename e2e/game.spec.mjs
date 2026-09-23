@@ -16,21 +16,26 @@ test.describe('Magic Cube Game Screen', () => {
     await expect(page.getByText(/MOVES: 0/i)).toBeVisible();
 
     // Buttons
-    await expect(page.locator('div.r-cursor-1loqt21', { hasText: 'Scramble' })).toBeVisible();
-    await expect(page.locator('div.r-cursor-1loqt21', { hasText: 'Reset Game' })).toBeVisible();
-    await expect(page.locator('div.r-cursor-1loqt21', { hasText: 'Yellow Top' })).toBeVisible();
-    await expect(page.locator('div.r-cursor-1loqt21', { hasText: 'Reset View' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /scramble/i })).toBeVisible();
+    await expect(page.getByText('Reset Game')).toBeVisible();
+    await expect(page.getByText('Yellow Top')).toBeVisible();
+    await expect(page.getByText('Reset View')).toBeVisible();
 
     // Capture screenshot as evidence
     await page.screenshot({
-      path: 'C:/Users/YES-COMPUTER-ET/.gemini/antigravity/brain/4a3ddbcf-9ac0-4b13-9931-52122d0fa97c/scratch/game_screen.png',
+      path: 'C:/Users/YES-COMPUTER-ET/.gemini/antigravity/brain/1b03c2b6-01a6-463e-a771-5f830dc06b17/scratch/game_screen.png',
     });
   });
 
-  test('scrambling cube changes phase to PLAYING', async ({ page }) => {
-    const scrambleBtn = page.locator('div.r-cursor-1loqt21', { hasText: 'Scramble' });
+  test('scrambling cube changes phase to PLAYING and resets moves', async ({ page }) => {
+    const scrambleBtn = page.getByRole('button', { name: /scramble/i });
     await expect(scrambleBtn).toBeVisible();
     await scrambleBtn.click();
+
+    // Scramble banner with Skip button appears
+    const skipBtn = page.getByRole('button', { name: /skip/i });
+    await expect(skipBtn).toBeVisible();
+    await skipBtn.click();
 
     // Game phase transitions to PLAYING
     await expect(page.getByText(/PLAYING/i)).toBeVisible();
@@ -39,21 +44,25 @@ test.describe('Magic Cube Game Screen', () => {
   });
 
   test('reset game restores initial solved phase', async ({ page }) => {
-    const scrambleBtn = page.locator('div.r-cursor-1loqt21', { hasText: 'Scramble' });
+    const scrambleBtn = page.getByRole('button', { name: /scramble/i });
     await scrambleBtn.click();
+
+    // Skip to finish scramble immediately
+    const skipBtn = page.getByRole('button', { name: /skip/i });
+    await skipBtn.click();
     await expect(page.getByText(/PLAYING/i)).toBeVisible();
 
-    const resetBtn = page.locator('div.r-cursor-1loqt21', { hasText: 'Reset Game' });
+    const resetBtn = page.getByText('Reset Game');
     await resetBtn.click();
     await expect(page.getByText(/SOLVED/i)).toBeVisible();
     await expect(page.getByText(/MOVES: 0/i)).toBeVisible();
   });
 
   test('toggling top face button alternates orientation label', async ({ page }) => {
-    const toggleBtn = page.locator('div.r-cursor-1loqt21', { hasText: 'Yellow Top' });
+    const toggleBtn = page.getByText('Yellow Top');
     await expect(toggleBtn).toBeVisible();
     await toggleBtn.click();
 
-    await expect(page.locator('div.r-cursor-1loqt21', { hasText: 'White Top' })).toBeVisible();
+    await expect(page.getByText('White Top')).toBeVisible();
   });
 });

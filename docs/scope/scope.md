@@ -16,7 +16,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 3 | Cube data model and state machine | Foundation | done |
 | 4 | Design system and UI foundation | Foundation | done |
 | 5 | 3D cube renderer and interaction | Slice 1 | done |
-| 6 | Scramble engine | Slice 2 | planned |
+| 6 | Scramble engine | Slice 2 | done |
 | 7 | Solve timer and move counter | Slice 3 | planned |
 
 ## Foundations
@@ -84,10 +84,18 @@ Render the solved 3x3 cube in 3D on screen using Three.js via react-three-fiber 
 
 ## Slice 2: Scramble
 
-### 6. Scramble engine
+### 6. Scramble engine · done
 Generate a valid random scramble (a sequence of moves that produces a solvable, non-trivially scrambled cube) and animate the cube through those moves so the player sees it scramble. A Scramble button triggers it from the solved state or mid solve.
 **Done when:** tapping Scramble applies a random sequence of at least 20 moves with smooth animation; the resulting state is always solvable; tapping Scramble again re-scrambles; the move sequence is visible to the player.
-- [ ] Design it (spec): `/architect scramble engine`
+- [x] Design it (spec): `/architect scramble engine`
+  spec [0006](../specs/0006-scramble-engine/index.md) · code in `src/logic/scramble.ts`, `src/store/useCubeStore.ts`, `src/components/`
+- [x] Build it: `/develop scramble engine`
+  - [x] Pure logic: WCA pseudo random scramble generation, axis cancellation filtering, and notation formatting (AC-1, AC-2)
+  - [x] Store state and queue: scrambleCube, skipScramble, queue chaining, and race condition guards (AC-3, AC-6, AC-8)
+  - [x] 3D animation loop: dynamic duration 70ms turn execution and in flight transform neutralization (AC-4, AC-5)
+  - [x] User interface and controls: Scramble button, active scramble banner with Skip button, and notation display card (AC-5, AC-7, AC-8)
+- [x] Verify it: `/check verify scramble engine`
+- [x] Test it: `/test scramble engine`
 
 ## Slice 3: Timer and result
 

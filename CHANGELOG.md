@@ -18,9 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Direct face swipe gestures that project 3D face tangents into screen space across an eighteen point threshold to trigger legal slice turns (see spec 0005).
 - Tactile haptic feedback providing a light impact pulse on mobile devices when slice rotations finish (see spec 0005).
 - Primary pointer locking that tracks the active finger and ignores secondary touch contacts until release (see spec 0005).
+- World Cube Association compliant scramble generator producing pseudo random sequences of twenty to twenty five legal face turns with axis cancellation filtering (see spec 0006).
+- High speed scramble animation turning cube slices at seventy milliseconds per move for a fluid visual shuffle (see spec 0006).
+- Instant skip option via screen tap or banner button that immediately snaps the cube to the final scrambled state (see spec 0006).
+- Scramble notation card displaying the full move sequence on screen during and after shuffling (see spec 0006).
+- Seamless mid solve scramble triggering that cancels active manual turns and begins a fresh shuffle without resetting the app (see spec 0006).
 
 ### Changed
 - Whole cube orbit rotation now maps screen swipes directly around world axes with exponential damping for smooth inspection (see spec 0005).
+- Scramble button in the overlay now initiates animated queue playback and temporarily disables to prevent conflicting turns (see spec 0006).
 
 ### Fixed
 - Scramble moves no longer count toward player solve moves or pollute move history.

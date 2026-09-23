@@ -14,6 +14,8 @@ import {
   getNextGamePhase,
   ALL_MOVE_NAMES,
 } from '../logic/cubeMoves';
+import { generateScramble, formatScrambleNotation } from '../logic/scramble';
+import { triggerHapticFeedback } from '../logic/haptics';
 
 export type { GamePhase, MoveName, BaseMove, MoveAnimationInfo, CubeValidationResult };
 export { createSolvedCubeState, validateCubeState, isCubeSolved, ALL_MOVE_NAMES, CUBE_FACE_COLORS, FACE_COLORS, PLASTIC_COLOR };
@@ -44,6 +46,8 @@ export interface CubeStoreState {
   animatingMove: ActiveMoveAnimation | null;
   pendingMove: MoveName | null;
   scrambleQueue: MoveName[];
+  latestScramble: MoveName[];
+  scrambleNotation: string;
   viewPresetTrigger: ViewPresetTrigger | null;
 
   setCubeState: (state: number[]) => void;
@@ -56,6 +60,8 @@ export interface CubeStoreState {
   requestMove: (move: MoveName) => boolean;
   applyMoveDirect: (move: MoveName) => void;
   startScramble: (moves: MoveName[]) => void;
+  scrambleCube: (moveCount?: number) => void;
+  skipScramble: () => void;
   startMoveAnimation: (move: MoveName) => void;
   finishMoveAnimation: () => void;
   applyMoveAction: (move: MoveName) => void;
@@ -86,6 +92,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
   animatingMove: null,
   pendingMove: null,
   scrambleQueue: [],
+  latestScramble: [],
+  scrambleNotation: '',
   viewPresetTrigger: null,
 
   setCubeState: (cubeState) => {
@@ -172,21 +180,37 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
     set((state) => applyDirectMoveState(state, move));
   },
 
-  startScramble: (moves: MoveName[]) => {
+  scrambleCube: (moveCount?: number) => {
+    const moves = generateScramble(moveCount);
+    const notation = formatScrambleNotation(moves);
     if (!moves || moves.length === 0) {
-      set((state) => ({
-        gamePhase: isCubeSolved(state.cubeState) ? 'SOLVED' : 'PLAYING',
+      set({
+        cubeState: createSolvedCubeState(),
+        timerMs: 0,
         moveCount: 0,
         moveHistory: [],
-      }));
+        gamePhase: 'SOLVED',
+        latestScramble: [],
+        scrambleNotation: '',
+        isAnimating: false,
+        animatingMove: null,
+        pendingMove: null,
+        scrambleQueue: [],
+      });
       return;
     }
+
     const [firstMove, ...restMoves] = moves;
-    const info = getMoveAnimationInfo(firstMove);
+    const info = getMoveAnimationInfo(firstMove, 70);
+
     set({
-      gamePhase: 'SCRAMBLING',
+      cubeState: createSolvedCubeState(),
+      timerMs: 0,
       moveCount: 0,
       moveHistory: [],
+      gamePhase: 'SCRAMBLING',
+      latestScramble: moves,
+      scrambleNotation: notation,
       scrambleQueue: restMoves,
       pendingMove: null,
       isAnimating: true,
@@ -194,11 +218,77 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
         move: firstMove,
         axis: info.axis,
         targetAngle: info.angle,
-        durationMs: info.durationMs,
+        durationMs: 70,
         easing: info.easing,
         filter: info.filter,
       },
     });
+
+    triggerHapticFeedback();
+  },
+
+  skipScramble: () => {
+    set((state) => {
+      if (state.gamePhase !== 'SCRAMBLING') {
+        return state;
+      }
+
+      let nextCubeState = state.cubeState;
+      if (state.animatingMove) {
+        nextCubeState = applyMove(nextCubeState, state.animatingMove.move);
+      }
+      for (const move of state.scrambleQueue) {
+        nextCubeState = applyMove(nextCubeState, move);
+      }
+
+      triggerHapticFeedback();
+
+      return {
+        cubeState: nextCubeState,
+        moveCount: 0,
+        moveHistory: [],
+        gamePhase: 'PLAYING',
+        isAnimating: false,
+        animatingMove: null,
+        pendingMove: null,
+        scrambleQueue: [],
+      };
+    });
+  },
+
+  startScramble: (moves: MoveName[]) => {
+    if (!moves || moves.length === 0) {
+      set((state) => ({
+        gamePhase: isCubeSolved(state.cubeState) ? 'SOLVED' : 'PLAYING',
+        moveCount: 0,
+        moveHistory: [],
+        isAnimating: false,
+        animatingMove: null,
+        scrambleQueue: [],
+      }));
+      return;
+    }
+    const [firstMove, ...restMoves] = moves;
+    const info = getMoveAnimationInfo(firstMove, 70);
+    set({
+      gamePhase: 'SCRAMBLING',
+      moveCount: 0,
+      moveHistory: [],
+      latestScramble: moves,
+      scrambleNotation: formatScrambleNotation(moves),
+      scrambleQueue: restMoves,
+      pendingMove: null,
+      isAnimating: true,
+      animatingMove: {
+        move: firstMove,
+        axis: info.axis,
+        targetAngle: info.angle,
+        durationMs: 70,
+        easing: info.easing,
+        filter: info.filter,
+      },
+    });
+    triggerHapticFeedback();
   },
 
   finishMoveAnimation: () => {
@@ -211,10 +301,10 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       const nextCount = isScrambleMove ? state.moveCount : state.moveCount + 1;
       const nextHistory = isScrambleMove ? state.moveHistory : [...state.moveHistory, completedMove];
 
-      // If active scramble moves are queued, chain immediately and defer solve check
+      // If active scramble moves are queued, chain immediately with 70ms duration
       if (state.scrambleQueue.length > 0) {
         const [nextMove, ...remainingScramble] = state.scrambleQueue;
-        const nextInfo = getMoveAnimationInfo(nextMove);
+        const nextInfo = getMoveAnimationInfo(nextMove, 70);
         return {
           cubeState: nextCubeState,
           moveCount: nextCount,
@@ -225,10 +315,25 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
             move: nextMove,
             axis: nextInfo.axis,
             targetAngle: nextInfo.angle,
-            durationMs: nextInfo.durationMs,
+            durationMs: 70,
             easing: nextInfo.easing,
             filter: nextInfo.filter,
           },
+        };
+      }
+
+      // If scramble finished normally (scrambleQueue drained)
+      if (isScrambleMove) {
+        triggerHapticFeedback();
+        return {
+          cubeState: nextCubeState,
+          moveCount: 0,
+          moveHistory: [],
+          isAnimating: false,
+          animatingMove: null,
+          pendingMove: null,
+          scrambleQueue: [],
+          gamePhase: isCubeSolved(nextCubeState) ? 'SOLVED' : 'PLAYING',
         };
       }
 
@@ -281,6 +386,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       animatingMove: null,
       pendingMove: null,
       scrambleQueue: [],
+      latestScramble: [],
+      scrambleNotation: '',
     });
   },
 }));

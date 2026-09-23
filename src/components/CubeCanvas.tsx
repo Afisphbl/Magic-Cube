@@ -73,6 +73,11 @@ export const CubeCanvas: React.FC = () => {
 
   // Pointer event handlers
   const handleBackgroundPointerDown = useCallback((e: any) => {
+    if (useCubeStore.getState().gamePhase === 'SCRAMBLING') {
+      useCubeStore.getState().skipScramble();
+      return;
+    }
+
     if (activePointerIdRef.current !== null && e.pointerId !== undefined && activePointerIdRef.current !== e.pointerId) {
       return;
     }
@@ -92,6 +97,12 @@ export const CubeCanvas: React.FC = () => {
     normal: [number, number, number]
   ) => {
     e.stopPropagation();
+
+    // Instant skip when player taps canvas during scramble (AC-5)
+    if (useCubeStore.getState().gamePhase === 'SCRAMBLING') {
+      useCubeStore.getState().skipScramble();
+      return;
+    }
 
     // Check if another pointer is already active
     if (activePointerIdRef.current !== null && e.pointerId !== undefined && activePointerIdRef.current !== e.pointerId) {

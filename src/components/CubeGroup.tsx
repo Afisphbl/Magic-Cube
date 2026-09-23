@@ -43,7 +43,6 @@ export const CubeGroup: React.FC<CubeGroupProps> = ({
   // Animation timing
   const animProgressRef = useRef<number>(0);
   const completedRef = useRef<boolean>(false);
-  const animationDuration = 0.26; // 260ms smooth transition
 
   useEffect(() => {
     if (animatingMove) {
@@ -74,7 +73,8 @@ export const CubeGroup: React.FC<CubeGroupProps> = ({
 
     if (animatingMove) {
       const dt = Math.min(delta, 0.05);
-      animProgressRef.current += dt / animationDuration;
+      const duration = (animatingMove.durationMs || 260) / 1000;
+      animProgressRef.current += dt / duration;
       const progress = Math.min(1, animProgressRef.current);
       const eased = easeInOutCubic(progress);
       const angle = animatingMove.targetAngle * eased;
@@ -108,8 +108,11 @@ export const CubeGroup: React.FC<CubeGroupProps> = ({
             group.quaternion.identity();
           }
         }
+        const isScramble = useCubeStore.getState().gamePhase === 'SCRAMBLING';
         finishMoveAnimation();
-        triggerHapticFeedback();
+        if (!isScramble) {
+          triggerHapticFeedback();
+        }
       }
     }
   });
