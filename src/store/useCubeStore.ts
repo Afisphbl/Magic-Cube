@@ -15,9 +15,10 @@ import {
   ALL_MOVE_NAMES,
 } from '../logic/cubeMoves';
 import { generateScramble, formatScrambleNotation } from '../logic/scramble';
-import { triggerHapticFeedback } from '../logic/haptics';
+import { triggerHapticFeedback, triggerVictoryHaptic } from '../logic/haptics';
+import { TimerStatus, SolveRecord, createSolveRecord } from '../logic/timer';
 
-export type { GamePhase, MoveName, BaseMove, MoveAnimationInfo, CubeValidationResult };
+export type { GamePhase, MoveName, BaseMove, MoveAnimationInfo, CubeValidationResult, TimerStatus, SolveRecord };
 export { createSolvedCubeState, validateCubeState, isCubeSolved, ALL_MOVE_NAMES, CUBE_FACE_COLORS, FACE_COLORS, PLASTIC_COLOR };
 
 export type OrientationPreset = 'yellow-top' | 'white-top' | 'reset';
@@ -39,6 +40,11 @@ export interface ActiveMoveAnimation {
 export interface CubeStoreState {
   cubeState: number[];
   timerMs: number;
+  timerStatus: TimerStatus;
+  solveStartTime: number | null;
+  solveEndTime: number | null;
+  latestSolve: SolveRecord | null;
+  isVictoryDismissed: boolean;
   moveCount: number;
   moveHistory: MoveName[];
   gamePhase: GamePhase;
@@ -57,6 +63,12 @@ export interface CubeStoreState {
   setGamePhase: (phase: GamePhase) => void;
   setAnimating: (animating: boolean) => void;
 
+  startTimer: () => boolean;
+  stopTimer: () => SolveRecord | null;
+  updateTimer: (now?: number) => void;
+  resetTimer: () => void;
+  dismissVictoryCard: () => void;
+
   requestMove: (move: MoveName) => boolean;
   applyMoveDirect: (move: MoveName) => void;
   startScramble: (moves: MoveName[]) => void;
@@ -74,17 +86,62 @@ function applyDirectMoveState(state: CubeStoreState, move: MoveName): Partial<Cu
   const nextCubeState = applyMove(state.cubeState, move);
   const solved = isCubeSolved(nextCubeState);
   const nextPhase = getNextGamePhase(state.gamePhase, solved, false, false);
+  const nextCount = state.moveCount + 1;
+
+  let timerStatus = state.timerStatus;
+  let solveStartTime = state.solveStartTime;
+  let solveEndTime = state.solveEndTime;
+  let timerMs = state.timerMs;
+  let latestSolve = state.latestSolve;
+
+  // If timer was IDLE and scrambled, start timer on direct move
+  if (
+    state.timerStatus === 'IDLE' &&
+    state.gamePhase === 'PLAYING' &&
+    state.scrambleNotation.trim().length > 0
+  ) {
+    timerStatus = 'RUNNING';
+    solveStartTime = Date.now();
+    solveEndTime = null;
+    timerMs = 0;
+  }
+
+  // If timer was RUNNING and cube is solved, stop timer and record
+  if (solved && (state.timerStatus === 'RUNNING' || timerStatus === 'RUNNING')) {
+    const endTime = Date.now();
+    const startTime = solveStartTime ?? endTime;
+    timerMs = Math.max(0, endTime - startTime);
+    solveEndTime = endTime;
+    timerStatus = 'STOPPED';
+    latestSolve = createSolveRecord({
+      timeMs: timerMs,
+      moveCount: nextCount,
+      scrambleNotation: state.scrambleNotation,
+    });
+    triggerVictoryHaptic();
+  }
+
   return {
     cubeState: nextCubeState,
-    moveCount: state.moveCount + 1,
+    moveCount: nextCount,
     moveHistory: [...state.moveHistory, move],
     gamePhase: nextPhase,
+    timerStatus,
+    solveStartTime,
+    solveEndTime,
+    timerMs,
+    latestSolve,
   };
 }
 
 export const useCubeStore = create<CubeStoreState>((set) => ({
   cubeState: createSolvedCubeState(),
   timerMs: 0,
+  timerStatus: 'IDLE',
+  solveStartTime: null,
+  solveEndTime: null,
+  latestSolve: null,
+  isVictoryDismissed: false,
   moveCount: 0,
   moveHistory: [],
   gamePhase: 'SOLVED',
@@ -114,6 +171,80 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
   setGamePhase: (gamePhase) => set({ gamePhase }),
   setAnimating: (isAnimating) => set({ isAnimating }),
 
+  startTimer: () => {
+    let started = false;
+    set((state) => {
+      if (
+        state.timerStatus === 'IDLE' &&
+        state.gamePhase === 'PLAYING' &&
+        state.scrambleNotation.trim().length > 0
+      ) {
+        started = true;
+        return {
+          timerStatus: 'RUNNING',
+          solveStartTime: Date.now(),
+          solveEndTime: null,
+          timerMs: 0,
+          isVictoryDismissed: false,
+        };
+      }
+      return state;
+    });
+    return started;
+  },
+
+  stopTimer: () => {
+    let createdRecord: SolveRecord | null = null;
+    set((state) => {
+      if (state.timerStatus !== 'RUNNING') {
+        return state;
+      }
+      const endTime = Date.now();
+      const startTime = state.solveStartTime ?? endTime;
+      const timeMs = Math.max(0, endTime - startTime);
+      createdRecord = createSolveRecord({
+        timeMs,
+        moveCount: state.moveCount,
+        scrambleNotation: state.scrambleNotation,
+      });
+      return {
+        timerStatus: 'STOPPED',
+        solveEndTime: endTime,
+        timerMs: timeMs,
+        latestSolve: createdRecord,
+        isVictoryDismissed: false,
+      };
+    });
+    return createdRecord;
+  },
+
+  updateTimer: (now?: number) => {
+    set((state) => {
+      if (state.timerStatus !== 'RUNNING' || state.solveStartTime === null) {
+        return state;
+      }
+      const current = now ?? Date.now();
+      return {
+        timerMs: Math.max(0, current - state.solveStartTime),
+      };
+    });
+  },
+
+  resetTimer: () => {
+    set({
+      timerStatus: 'IDLE',
+      solveStartTime: null,
+      solveEndTime: null,
+      timerMs: 0,
+      isVictoryDismissed: false,
+    });
+  },
+
+  dismissVictoryCard: () => {
+    set({ isVictoryDismissed: true });
+  },
+
+
   triggerOrientationPreset: (preset) =>
     set((state) => ({
       viewPresetTrigger: {
@@ -139,6 +270,12 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       }
       const info = getMoveAnimationInfo(move);
       accepted = true;
+
+      const shouldStartTimer =
+        state.timerStatus === 'IDLE' &&
+        state.gamePhase === 'PLAYING' &&
+        state.scrambleNotation.trim().length > 0;
+
       return {
         isAnimating: true,
         animatingMove: {
@@ -149,6 +286,15 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
           easing: info.easing,
           filter: info.filter,
         },
+        ...(shouldStartTimer
+          ? {
+              timerStatus: 'RUNNING' as TimerStatus,
+              solveStartTime: Date.now(),
+              solveEndTime: null,
+              timerMs: 0,
+              isVictoryDismissed: false,
+            }
+          : {}),
       };
     });
     return accepted;
@@ -158,6 +304,11 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
     set((state) => {
       if (state.isAnimating) return state;
       const info = getMoveAnimationInfo(move);
+      const shouldStartTimer =
+        state.timerStatus === 'IDLE' &&
+        state.gamePhase === 'PLAYING' &&
+        state.scrambleNotation.trim().length > 0;
+
       return {
         isAnimating: true,
         animatingMove: {
@@ -168,6 +319,15 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
           easing: info.easing,
           filter: info.filter,
         },
+        ...(shouldStartTimer
+          ? {
+              timerStatus: 'RUNNING' as TimerStatus,
+              solveStartTime: Date.now(),
+              solveEndTime: null,
+              timerMs: 0,
+              isVictoryDismissed: false,
+            }
+          : {}),
       };
     });
   },
@@ -187,6 +347,11 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       set({
         cubeState: createSolvedCubeState(),
         timerMs: 0,
+        timerStatus: 'IDLE',
+        solveStartTime: null,
+        solveEndTime: null,
+        latestSolve: null,
+        isVictoryDismissed: false,
         moveCount: 0,
         moveHistory: [],
         gamePhase: 'SOLVED',
@@ -206,6 +371,11 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
     set({
       cubeState: createSolvedCubeState(),
       timerMs: 0,
+      timerStatus: 'IDLE',
+      solveStartTime: null,
+      solveEndTime: null,
+      latestSolve: null,
+      isVictoryDismissed: false,
       moveCount: 0,
       moveHistory: [],
       gamePhase: 'SCRAMBLING',
@@ -248,6 +418,12 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
         moveCount: 0,
         moveHistory: [],
         gamePhase: 'PLAYING',
+        timerMs: 0,
+        timerStatus: 'IDLE',
+        solveStartTime: null,
+        solveEndTime: null,
+        latestSolve: null,
+        isVictoryDismissed: false,
         isAnimating: false,
         animatingMove: null,
         pendingMove: null,
@@ -260,6 +436,12 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
     if (!moves || moves.length === 0) {
       set((state) => ({
         gamePhase: isCubeSolved(state.cubeState) ? 'SOLVED' : 'PLAYING',
+        timerMs: 0,
+        timerStatus: 'IDLE',
+        solveStartTime: null,
+        solveEndTime: null,
+        latestSolve: null,
+        isVictoryDismissed: false,
         moveCount: 0,
         moveHistory: [],
         isAnimating: false,
@@ -272,6 +454,12 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
     const info = getMoveAnimationInfo(firstMove, 70);
     set({
       gamePhase: 'SCRAMBLING',
+      timerMs: 0,
+      timerStatus: 'IDLE',
+      solveStartTime: null,
+      solveEndTime: null,
+      latestSolve: null,
+      isVictoryDismissed: false,
       moveCount: 0,
       moveHistory: [],
       latestScramble: moves,
@@ -334,6 +522,12 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
           pendingMove: null,
           scrambleQueue: [],
           gamePhase: isCubeSolved(nextCubeState) ? 'SOLVED' : 'PLAYING',
+          timerStatus: 'IDLE',
+          solveStartTime: null,
+          solveEndTime: null,
+          timerMs: 0,
+          latestSolve: null,
+          isVictoryDismissed: false,
         };
       }
 
@@ -362,6 +556,25 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       const solved = isCubeSolved(nextCubeState);
       const nextPhase = getNextGamePhase(state.gamePhase, solved, false, false);
 
+      let timerStatus = state.timerStatus;
+      let solveEndTime = state.solveEndTime;
+      let timerMs = state.timerMs;
+      let latestSolve = state.latestSolve;
+
+      if (solved && state.timerStatus === 'RUNNING') {
+        const endTime = Date.now();
+        const startTime = state.solveStartTime ?? endTime;
+        timerMs = Math.max(0, endTime - startTime);
+        solveEndTime = endTime;
+        timerStatus = 'STOPPED';
+        latestSolve = createSolveRecord({
+          timeMs: timerMs,
+          moveCount: nextCount,
+          scrambleNotation: state.scrambleNotation,
+        });
+        triggerVictoryHaptic();
+      }
+
       return {
         cubeState: nextCubeState,
         moveCount: nextCount,
@@ -371,6 +584,10 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
         pendingMove: null,
         scrambleQueue: [],
         gamePhase: nextPhase,
+        timerStatus,
+        solveEndTime,
+        timerMs,
+        latestSolve,
       };
     });
   },
@@ -379,6 +596,11 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
     set({
       cubeState: createSolvedCubeState(),
       timerMs: 0,
+      timerStatus: 'IDLE',
+      solveStartTime: null,
+      solveEndTime: null,
+      latestSolve: null,
+      isVictoryDismissed: false,
       moveCount: 0,
       moveHistory: [],
       gamePhase: 'SOLVED',
@@ -391,3 +613,4 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
     });
   },
 }));
+

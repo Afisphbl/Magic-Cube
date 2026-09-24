@@ -13,6 +13,7 @@ export const NotificationFeedbackType = {
 };
 
 let impactAsyncCalls = [];
+let notificationAsyncCalls = [];
 
 export async function impactAsync(style = ImpactFeedbackStyle.Medium) {
   impactAsyncCalls.push(style);
@@ -27,10 +28,27 @@ export function _resetImpactAsyncCalls() {
   impactAsyncCalls = [];
 }
 
+export async function notificationAsync(type = NotificationFeedbackType.Success) {
+  notificationAsyncCalls.push(type);
+  return Promise.resolve();
+}
+
+export function _getNotificationAsyncCalls() {
+  return notificationAsyncCalls;
+}
+
+export function _resetNotificationAsyncCalls() {
+  notificationAsyncCalls = [];
+}
+
 export default {
   ImpactFeedbackStyle,
   NotificationFeedbackType,
   impactAsync,
   _getImpactAsyncCalls,
   _resetImpactAsyncCalls,
+  notificationAsync,
+  _getNotificationAsyncCalls,
+  _resetNotificationAsyncCalls,
 };
+

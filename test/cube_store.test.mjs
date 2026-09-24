@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Platform } from 'react-native';
 import {
   useCubeStore,
   createSolvedCubeState,
@@ -8,6 +9,7 @@ import {
   PLASTIC_COLOR,
 } from '../src/store/useCubeStore.ts';
 import { isCubeSolved } from '../src/logic/cubeMoves.ts';
+import mockHaptics from './mocks/expo-haptics.mjs';
 
 test('createSolvedCubeState produces 54-element array with 9 stickers per face', () => {
   const state = createSolvedCubeState();
@@ -347,3 +349,318 @@ test('finishMoveAnimation defers solve detection until buffered moves complete (
   assert.equal(state.gamePhase, 'PLAYING');
   assert.equal(isCubeSolved(state.cubeState), false);
 });
+
+// --- Slice 3: Solve Timer and Move Counter Tests ---
+
+test('AC-1: First manual face turn after scramble starts solve timer', () => {
+  useCubeStore.getState().resetGame();
+  mockHaptics._resetNotificationAsyncCalls();
+
+  // Scramble the cube
+  useCubeStore.getState().scrambleCube(2);
+  // Complete the scramble animations
+  useCubeStore.getState().finishMoveAnimation();
+  useCubeStore.getState().finishMoveAnimation();
+
+  let state = useCubeStore.getState();
+  assert.equal(state.gamePhase, 'PLAYING');
+  assert.equal(state.timerStatus, 'IDLE');
+  assert.equal(state.solveStartTime, null);
+  assert.equal(state.timerMs, 0);
+
+  // Player makes first manual turn
+  const accepted = useCubeStore.getState().requestMove('R');
+  assert.equal(accepted, true);
+
+  state = useCubeStore.getState();
+  assert.equal(state.timerStatus, 'RUNNING');
+  assert.ok(typeof state.solveStartTime === 'number' && state.solveStartTime > 0);
+  assert.equal(state.solveEndTime, null);
+  assert.equal(state.isVictoryDismissed, false);
+});
+
+test('AC-2: Casual unscrambled moves do not start timer or trigger victory records', () => {
+  useCubeStore.getState().resetGame();
+  mockHaptics._resetNotificationAsyncCalls();
+
+  let state = useCubeStore.getState();
+  assert.equal(state.timerStatus, 'IDLE');
+  assert.equal(state.scrambleNotation, '');
+
+  // Perform move on unscrambled cube
+  useCubeStore.getState().requestMove('R');
+  state = useCubeStore.getState();
+  assert.equal(state.timerStatus, 'IDLE');
+  assert.equal(state.solveStartTime, null);
+
+  useCubeStore.getState().finishMoveAnimation();
+  state = useCubeStore.getState();
+  assert.equal(state.timerStatus, 'IDLE');
+  assert.equal(state.latestSolve, null);
+
+  // Undo move to return to solved state
+  useCubeStore.getState().requestMove("R'");
+  useCubeStore.getState().finishMoveAnimation();
+
+  state = useCubeStore.getState();
+  assert.equal(isCubeSolved(state.cubeState), true);
+  assert.equal(state.timerStatus, 'IDLE');
+  assert.equal(state.latestSolve, null);
+  assert.equal(mockHaptics._getNotificationAsyncCalls().length, 0);
+});
+
+test('AC-3: Face turns increment moveCount while orientation presets do not', () => {
+  useCubeStore.getState().resetGame();
+  assert.equal(useCubeStore.getState().moveCount, 0);
+
+  // View orientation presets must not increment moveCount
+  useCubeStore.getState().triggerOrientationPreset('yellow-top');
+  useCubeStore.getState().triggerOrientationPreset('white-top');
+  useCubeStore.getState().triggerOrientationPreset('reset');
+  assert.equal(useCubeStore.getState().moveCount, 0);
+
+  // Manual face turns increment moveCount
+  useCubeStore.getState().requestMove('U');
+  useCubeStore.getState().finishMoveAnimation();
+  assert.equal(useCubeStore.getState().moveCount, 1);
+
+  useCubeStore.getState().requestMove("U'");
+  useCubeStore.getState().finishMoveAnimation();
+  assert.equal(useCubeStore.getState().moveCount, 2);
+});
+
+test('AC-5, AC-6, AC-7: Automatic solve completion stops timer, creates SolveRecord, and triggers victory haptic', () => {
+  const originalOS = Platform.OS;
+  Platform.OS = 'android';
+  try {
+    useCubeStore.getState().resetGame();
+    mockHaptics._resetNotificationAsyncCalls();
+
+    // Scramble with a single known move R
+    useCubeStore.getState().startScramble(['R']);
+    useCubeStore.getState().finishMoveAnimation();
+
+    let state = useCubeStore.getState();
+    assert.equal(state.gamePhase, 'PLAYING');
+    assert.equal(state.timerStatus, 'IDLE');
+    assert.equal(state.scrambleNotation, 'R');
+
+    // Solving move R'
+    useCubeStore.getState().requestMove("R'");
+    state = useCubeStore.getState();
+    assert.equal(state.timerStatus, 'RUNNING');
+    const startTime = state.solveStartTime;
+    assert.ok(startTime);
+
+    // Complete R' animation: cube reaches solved state!
+    useCubeStore.getState().finishMoveAnimation();
+
+    state = useCubeStore.getState();
+    assert.equal(isCubeSolved(state.cubeState), true);
+    assert.equal(state.timerStatus, 'STOPPED');
+    assert.ok(typeof state.solveEndTime === 'number');
+    assert.ok(state.solveEndTime >= startTime);
+    assert.equal(state.moveCount, 1);
+
+    // AC-6: Validate latestSolve record
+    const solve = state.latestSolve;
+    assert.ok(solve !== null, 'latestSolve must be populated');
+    assert.ok(typeof solve.id === 'string' && solve.id.length > 0);
+    assert.equal(solve.moveCount, 1);
+    assert.equal(solve.scrambleNotation, 'R');
+    assert.ok(typeof solve.timeMs === 'number');
+    assert.ok(typeof solve.turnsPerSecond === 'number');
+    assert.equal(state.isVictoryDismissed, false);
+
+    // AC-7: Victory haptic triggered
+    const hapticCalls = mockHaptics._getNotificationAsyncCalls();
+    assert.equal(hapticCalls.length, 1);
+    assert.equal(hapticCalls[0], mockHaptics.NotificationFeedbackType.Success);
+  } finally {
+    Platform.OS = originalOS;
+  }
+});
+
+test('AC-8: Mid-solve scramble immediately aborts active timer and clears progress', () => {
+  useCubeStore.getState().resetGame();
+
+  useCubeStore.getState().startScramble(['U']);
+  useCubeStore.getState().finishMoveAnimation();
+
+  // Start timer with a manual move
+  useCubeStore.getState().requestMove('R');
+  assert.equal(useCubeStore.getState().timerStatus, 'RUNNING');
+
+  // Mid-solve scramble
+  useCubeStore.getState().scrambleCube(3);
+
+  const state = useCubeStore.getState();
+  assert.equal(state.timerStatus, 'IDLE');
+  assert.equal(state.solveStartTime, null);
+  assert.equal(state.solveEndTime, null);
+  assert.equal(state.timerMs, 0);
+  assert.equal(state.latestSolve, null);
+  assert.equal(state.moveCount, 0);
+});
+
+test('AC-8: Manual game reset aborts active timer and clears solve state', () => {
+  useCubeStore.getState().resetGame();
+
+  useCubeStore.getState().startScramble(['F']);
+  useCubeStore.getState().finishMoveAnimation();
+
+  useCubeStore.getState().requestMove('U');
+  assert.equal(useCubeStore.getState().timerStatus, 'RUNNING');
+
+  useCubeStore.getState().resetGame();
+
+  const state = useCubeStore.getState();
+  assert.equal(state.timerStatus, 'IDLE');
+  assert.equal(state.solveStartTime, null);
+  assert.equal(state.solveEndTime, null);
+  assert.equal(state.timerMs, 0);
+  assert.equal(state.latestSolve, null);
+  assert.equal(state.scrambleNotation, '');
+});
+
+test('AC-10: Post-solve face turns maintain timerStatus STOPPED', () => {
+  const originalOS = Platform.OS;
+  Platform.OS = 'android';
+  try {
+    useCubeStore.getState().resetGame();
+    mockHaptics._resetNotificationAsyncCalls();
+
+    // Fast solve: scramble R, solve with R'
+    useCubeStore.getState().startScramble(['R']);
+    useCubeStore.getState().finishMoveAnimation();
+    useCubeStore.getState().requestMove("R'");
+    useCubeStore.getState().finishMoveAnimation();
+
+    assert.equal(useCubeStore.getState().timerStatus, 'STOPPED');
+    const originalSolve = useCubeStore.getState().latestSolve;
+    assert.ok(originalSolve);
+
+    // Dismiss victory card
+    useCubeStore.getState().dismissVictoryCard();
+    assert.equal(useCubeStore.getState().isVictoryDismissed, true);
+
+    // Turn face on solved cube after dismissal
+    useCubeStore.getState().requestMove('U');
+    useCubeStore.getState().finishMoveAnimation();
+
+    const state = useCubeStore.getState();
+    assert.equal(state.timerStatus, 'STOPPED', 'timerStatus must remain STOPPED on post-solve moves');
+    assert.deepEqual(state.latestSolve, originalSolve, 'Original solve record must not be overwritten');
+    assert.equal(mockHaptics._getNotificationAsyncCalls().length, 1, 'No additional victory haptics');
+  } finally {
+    Platform.OS = originalOS;
+  }
+});
+
+
+test('Store timer actions: startTimer, stopTimer, updateTimer, resetTimer, dismissVictoryCard', () => {
+  useCubeStore.getState().resetGame();
+
+  // startTimer fails if not scrambled
+  const startedCasual = useCubeStore.getState().startTimer();
+  assert.equal(startedCasual, false);
+
+  // Set scrambled notation & phase
+  useCubeStore.setState({
+    gamePhase: 'PLAYING',
+    scrambleNotation: 'R U F',
+    timerStatus: 'IDLE',
+  });
+
+  const started = useCubeStore.getState().startTimer();
+  assert.equal(started, true);
+  assert.equal(useCubeStore.getState().timerStatus, 'RUNNING');
+
+  // updateTimer updates timerMs
+  const startTime = useCubeStore.getState().solveStartTime;
+  assert.ok(startTime);
+  useCubeStore.getState().updateTimer(startTime + 3500);
+  assert.equal(useCubeStore.getState().timerMs, 3500);
+
+  // stopTimer creates record
+  const record = useCubeStore.getState().stopTimer();
+  assert.ok(record !== null);
+  assert.equal(useCubeStore.getState().timerStatus, 'STOPPED');
+  assert.deepEqual(useCubeStore.getState().latestSolve, record);
+
+  // dismissVictoryCard
+  useCubeStore.getState().dismissVictoryCard();
+  assert.equal(useCubeStore.getState().isVictoryDismissed, true);
+
+  // resetTimer
+  useCubeStore.getState().resetTimer();
+  const resetState = useCubeStore.getState();
+  assert.equal(resetState.timerStatus, 'IDLE');
+  assert.equal(resetState.solveStartTime, null);
+  assert.equal(resetState.timerMs, 0);
+  assert.equal(resetState.isVictoryDismissed, false);
+});
+
+test('AC-1: startMoveAnimation starts timer on scrambled cube in PLAYING phase', () => {
+  useCubeStore.getState().resetGame();
+  useCubeStore.setState({
+    gamePhase: 'PLAYING',
+    scrambleNotation: "F R U",
+    timerStatus: 'IDLE',
+  });
+
+  useCubeStore.getState().startMoveAnimation('U');
+  const state = useCubeStore.getState();
+  assert.equal(state.timerStatus, 'RUNNING');
+  assert.ok(typeof state.solveStartTime === 'number');
+  assert.equal(state.isAnimating, true);
+  assert.equal(state.animatingMove?.move, 'U');
+});
+
+test('AC-5: applyMoveDirect transitions to STOPPED and creates SolveRecord on solve', () => {
+  useCubeStore.getState().resetGame();
+  useCubeStore.setState({
+    gamePhase: 'PLAYING',
+    scrambleNotation: 'R',
+    timerStatus: 'IDLE',
+  });
+
+  // Make move R to scramble slightly
+  useCubeStore.getState().applyMoveDirect('R');
+  let state = useCubeStore.getState();
+  assert.equal(state.timerStatus, 'RUNNING');
+  assert.equal(state.moveCount, 1);
+
+  // Now solve with R'
+  useCubeStore.getState().applyMoveDirect("R'");
+  state = useCubeStore.getState();
+  assert.equal(state.timerStatus, 'STOPPED');
+  assert.equal(state.gamePhase, 'SOLVED');
+  assert.equal(state.moveCount, 2);
+  assert.ok(state.latestSolve !== null);
+  assert.equal(state.latestSolve?.moveCount, 2);
+  assert.equal(state.latestSolve?.scrambleNotation, 'R');
+});
+
+test('AC-9: App backgrounding simulation preserves monotonic duration tracking', () => {
+  useCubeStore.getState().resetGame();
+  useCubeStore.setState({
+    gamePhase: 'PLAYING',
+    scrambleNotation: 'U',
+    timerStatus: 'IDLE',
+  });
+
+  useCubeStore.getState().startTimer();
+  const startTime = useCubeStore.getState().solveStartTime;
+  assert.ok(startTime);
+
+  // Simulate returning from background 10 seconds later
+  const simulatedForegroundTime = startTime + 10250;
+  useCubeStore.getState().updateTimer(simulatedForegroundTime);
+
+  const state = useCubeStore.getState();
+  assert.equal(state.timerStatus, 'RUNNING');
+  assert.equal(state.timerMs, 10250);
+});
+
+

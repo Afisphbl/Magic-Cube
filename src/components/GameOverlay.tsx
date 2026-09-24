@@ -3,15 +3,35 @@ import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCubeStore } from '../store/useCubeStore';
 import { colors } from '../theme/colors';
+import { useTimerTicker } from '../hooks/useTimerTicker';
+import { VictoryCard } from './VictoryCard';
+import { StatBadge } from './ui';
 
-export const GameOverlay: React.FC = () => {
-  const moveCount = useCubeStore((state) => state.moveCount);
-  const gamePhase = useCubeStore((state) => state.gamePhase);
+export interface GameOverlayProps {
+  moveCount?: number;
+  timerText?: string;
+  gamePhase?: string;
+}
+
+export const GameOverlay: React.FC<GameOverlayProps> = ({
+  moveCount: propMoveCount,
+  timerText: propTimerText,
+  gamePhase: propGamePhase,
+}) => {
+  const storeMoveCount = useCubeStore((state) => state.moveCount);
+  const storeGamePhase = useCubeStore((state) => state.gamePhase);
   const resetGame = useCubeStore((state) => state.resetGame);
   const triggerOrientationPreset = useCubeStore((state) => state.triggerOrientationPreset);
   const scrambleCube = useCubeStore((state) => state.scrambleCube);
   const skipScramble = useCubeStore((state) => state.skipScramble);
   const scrambleNotation = useCubeStore((state) => state.scrambleNotation);
+
+  const hookedTimerText = useTimerTicker();
+
+  const moveCount = propMoveCount !== undefined ? propMoveCount : storeMoveCount;
+  const timerText = propTimerText !== undefined ? propTimerText : hookedTimerText;
+  const gamePhase = propGamePhase !== undefined ? propGamePhase : storeGamePhase;
+
 
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -57,12 +77,20 @@ export const GameOverlay: React.FC = () => {
           Magic Cube
         </Text>
         <View style={[styles.statsContainer, isCompact && styles.statsContainerCompact]}>
-          <Text style={[styles.statLabel, isCompact && styles.statLabelCompact]}>
-            Phase: {gamePhase}
-          </Text>
-          <Text style={[styles.statLabel, isCompact && styles.statLabelCompact]}>
-            Moves: {moveCount}
-          </Text>
+          <StatBadge
+            icon="timer-outline"
+            label="Time"
+            value={timerText}
+            variant="cyan"
+            style={[styles.hudBadge, isCompact && styles.hudBadgeCompact]}
+          />
+          <StatBadge
+            icon="swap-vertical-outline"
+            label="Moves"
+            value={moveCount}
+            variant="orange"
+            style={[styles.hudBadge, isCompact && styles.hudBadgeCompact]}
+          />
         </View>
 
         {Boolean(scrambleNotation) && (
@@ -148,6 +176,8 @@ export const GameOverlay: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
+
+      <VictoryCard />
     </View>
   );
 };
@@ -181,6 +211,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
     gap: 10,
   },
+  hudBadge: {
+    minWidth: 110,
+  },
+  hudBadgeCompact: {
+    minWidth: 90,
+  },
+
   statLabel: {
     fontSize: 13,
     color: '#A0A0A5',

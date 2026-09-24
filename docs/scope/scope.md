@@ -17,7 +17,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 4 | Design system and UI foundation | Foundation | done |
 | 5 | 3D cube renderer and interaction | Slice 1 | done |
 | 6 | Scramble engine | Slice 2 | done |
-| 7 | Solve timer and move counter | Slice 3 | planned |
+| 7 | Solve timer and move counter | Slice 3 | done |
 
 ## Foundations
 
@@ -99,10 +99,19 @@ Generate a valid random scramble (a sequence of moves that produces a solvable, 
 
 ## Slice 3: Timer and result
 
-### 7. Solve timer and move counter
+### 7. Solve timer and move counter · done
 Start timing when the player makes the first move after a scramble; stop and show the result when the cube reaches the solved state. Display elapsed time and move count during play and on the result screen.
 **Done when:** the timer starts on the first move, stops automatically on solve, and the result screen shows time and move count; solved state detection is reliable; the player can then scramble again.
-- [ ] Design it (spec): `/architect solve timer and move counter`
+- [x] Design it (spec): `/architect solve timer and move counter`
+  spec [0007](../specs/0007-solve-timer-and-move-counter/index.md) · code in `src/logic/timer.ts`, `src/store/useCubeStore.ts`, `src/components/`
+- [x] Build it: `/develop solve timer and move counter`
+  - [x] Pure logic: timer formatting, turns per second calculations, solve records, and victory haptics (AC-4, AC-6, AC-7)
+  - [x] Store state and actions: timer status machine, timestamp tracking, and victory card visibility (AC-1, AC-2, AC-5, AC-6, AC-8, AC-10)
+  - [x] Lifecycle integration: start timer on first manual move, stop on verified solve, and handle scramble resets (AC-1, AC-2, AC-3, AC-5, AC-8, AC-10)
+  - [x] User interface and overlays: live HUD timer with local display ticker, move counter, and animated victory card (AC-3, AC-4, AC-7, AC-9)
+
+- [x] Verify it: `/check verify solve timer and move counter`
+- [x] Test it: `/test solve timer and move counter`
 
 ## Deferred
 Out of scope for the current build pass, kept so the plan stays honest.
