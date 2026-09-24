@@ -28,6 +28,9 @@ export async function resolve(specifier, context, nextResolve) {
   if (specifier === 'expo-haptics') {
     return nextResolve(pathToFileURL(path.resolve('./test/mocks/expo-haptics.mjs')).href, context);
   }
+  if (specifier === '@react-native-async-storage/async-storage') {
+    return nextResolve(pathToFileURL(path.resolve('./test/mocks/async-storage.mjs')).href, context);
+  }
   try {
     return await nextResolve(specifier, context);
   } catch (err) {

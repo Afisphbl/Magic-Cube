@@ -1,63 +1,164 @@
-import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, AppState, AppStateStatus } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCubeStore } from '../store/useCubeStore';
+import { Ionicons } from '@expo/vector-icons';
+import { useCubeStore, TimerStatus, GamePhase } from '../store/useCubeStore';
 import { colors } from '../theme/colors';
 import { useTimerTicker } from '../hooks/useTimerTicker';
 import { VictoryCard } from './VictoryCard';
+import { RecordsModal } from './RecordsModal';
+import { PauseModal } from './PauseModal';
 import { StatBadge } from './ui';
 
 export interface GameOverlayProps {
   moveCount?: number;
   timerText?: string;
-  gamePhase?: string;
+  gamePhase?: GamePhase;
+  timerStatus?: TimerStatus;
+  isPaused?: boolean;
+  onStartPress?: () => void;
+  onRecordPress?: () => void;
+  onPausePress?: () => void;
 }
 
 export const GameOverlay: React.FC<GameOverlayProps> = ({
   moveCount: propMoveCount,
   timerText: propTimerText,
   gamePhase: propGamePhase,
+  timerStatus: propTimerStatus,
+  isPaused: propIsPaused,
+  onStartPress,
+  onRecordPress,
+  onPausePress,
 }) => {
   const storeMoveCount = useCubeStore((state) => state.moveCount);
   const storeGamePhase = useCubeStore((state) => state.gamePhase);
-  const resetGame = useCubeStore((state) => state.resetGame);
-  const triggerOrientationPreset = useCubeStore((state) => state.triggerOrientationPreset);
-  const scrambleCube = useCubeStore((state) => state.scrambleCube);
-  const skipScramble = useCubeStore((state) => state.skipScramble);
-  const scrambleNotation = useCubeStore((state) => state.scrambleNotation);
+  const storeTimerStatus = useCubeStore((state) => state.timerStatus);
+  const storeIsPaused = useCubeStore((state) => state.isPaused);
+  const startSolveGame = useCubeStore((state) => state.startSolveGame);
+  const openRecordsModal = useCubeStore((state) => state.openRecordsModal);
+  const pauseGame = useCubeStore((state) => state.pauseGame);
 
   const hookedTimerText = useTimerTicker();
 
   const moveCount = propMoveCount !== undefined ? propMoveCount : storeMoveCount;
   const timerText = propTimerText !== undefined ? propTimerText : hookedTimerText;
   const gamePhase = propGamePhase !== undefined ? propGamePhase : storeGamePhase;
-
+  const timerStatus = propTimerStatus !== undefined ? propTimerStatus : storeTimerStatus;
+  const isPaused = propIsPaused !== undefined ? propIsPaused : storeIsPaused;
 
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isCompact = width < 380 || height < 680;
   const isShort = height < 520;
 
-  const [isYellowTop, setIsYellowTop] = useState<boolean>(false);
+  // Auto-pause when application enters background or becomes inactive (AC-9)
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState.match(/inactive|background/)) {
+        const state = useCubeStore.getState();
+        if (state.gamePhase === 'PLAYING' && state.timerStatus === 'RUNNING' && !state.isPaused) {
+          state.pauseGame();
+        }
+      }
+    };
 
-  const handleToggleTopFace = useCallback(() => {
-    if (isYellowTop) {
-      triggerOrientationPreset('white-top');
-      setIsYellowTop(false);
+    const subscription = AppState.addEventListener?.('change', handleAppStateChange);
+    return () => {
+      subscription?.remove?.();
+    };
+  }, []);
+
+  const handleStart = () => {
+    if (onStartPress) {
+      onStartPress();
     } else {
-      triggerOrientationPreset('yellow-top');
-      setIsYellowTop(true);
+      startSolveGame();
     }
-  }, [isYellowTop, triggerOrientationPreset]);
+  };
 
-  const handleResetView = useCallback(() => {
-    triggerOrientationPreset('reset');
-    setIsYellowTop(false);
-  }, [triggerOrientationPreset]);
+  const handleRecord = () => {
+    if (onRecordPress) {
+      onRecordPress();
+    } else {
+      openRecordsModal();
+    }
+  };
 
-  const handleScramble = useCallback(() => {
-    scrambleCube();
-  }, [scrambleCube]);
+  const handlePause = () => {
+    if (onPausePress) {
+      onPausePress();
+    } else {
+      pauseGame();
+    }
+  };
+
+  // Active play definition (AC-1, AC-2, AC-3)
+  const isActivePlay = gamePhase === 'PLAYING' && timerStatus === 'RUNNING';
+  const showCenterControls = !isActivePlay && !isPaused;
+  const showPauseButton = isActivePlay && !isPaused;
+
+  const actionButtons = (
+    <View style={[styles.buttonGroup, isCompact && styles.buttonGroupCompact]}>
+      <TouchableOpacity
+        style={[
+          styles.button,
+          styles.startButton,
+          isCompact && styles.buttonCompact,
+          isShort && styles.buttonShort,
+          gamePhase === 'SCRAMBLING' && styles.buttonDisabled,
+        ]}
+        onPress={handleStart}
+        disabled={gamePhase === 'SCRAMBLING'}
+        accessibilityRole="button"
+        accessibilityLabel="Start solve game"
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name={gamePhase === 'SCRAMBLING' ? 'sync' : 'play'}
+          size={isCompact ? 16 : 20}
+          color="#070F1E"
+        />
+        <Text
+          style={[
+            styles.buttonText,
+            styles.startButtonText,
+            isCompact && styles.buttonTextCompact,
+          ]}
+        >
+          {gamePhase === 'SCRAMBLING' ? 'Shuffling...' : 'Start'}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[
+          styles.button,
+          styles.recordButton,
+          isCompact && styles.buttonCompact,
+          isShort && styles.buttonShort,
+        ]}
+        onPress={handleRecord}
+        accessibilityRole="button"
+        accessibilityLabel="View solve records"
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name="trophy-outline"
+          size={isCompact ? 16 : 20}
+          color={colors.brand.gold}
+        />
+        <Text
+          style={[
+            styles.buttonText,
+            styles.recordButtonText,
+            isCompact && styles.buttonTextCompact,
+          ]}
+        >
+          Record
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View
@@ -76,108 +177,59 @@ export const GameOverlay: React.FC<GameOverlayProps> = ({
         <Text style={[styles.title, isCompact && styles.titleCompact, isShort && styles.titleShort]}>
           Magic Cube
         </Text>
-        <View style={[styles.statsContainer, isCompact && styles.statsContainerCompact]}>
-          <StatBadge
-            icon="timer-outline"
-            label="Time"
-            value={timerText}
-            variant="cyan"
-            style={[styles.hudBadge, isCompact && styles.hudBadgeCompact]}
-          />
-          <StatBadge
-            icon="swap-vertical-outline"
-            label="Moves"
-            value={moveCount}
-            variant="orange"
-            style={[styles.hudBadge, isCompact && styles.hudBadgeCompact]}
-          />
-        </View>
-
-        {Boolean(scrambleNotation) && (
-          <View style={[styles.notationCard, isCompact && styles.notationCardCompact]}>
-            <Text style={styles.notationLabel}>Scramble Notation</Text>
-            <Text style={[styles.notationText, isCompact && styles.notationTextCompact]} numberOfLines={2}>
-              {scrambleNotation}
-            </Text>
+        <View style={[styles.statsRowWrapper, isCompact && styles.statsRowWrapperCompact]}>
+          <View style={[styles.statsContainer, isCompact && styles.statsContainerCompact]}>
+            <StatBadge
+              icon="timer-outline"
+              label="Time"
+              value={timerText}
+              variant="cyan"
+              style={[styles.hudBadge, isCompact && styles.hudBadgeCompact]}
+            />
+            <StatBadge
+              icon="swap-vertical-outline"
+              label="Moves"
+              value={moveCount}
+              variant="orange"
+              style={[styles.hudBadge, isCompact && styles.hudBadgeCompact]}
+            />
           </View>
-        )}
-
-        {gamePhase === 'SCRAMBLING' && (
-          <View style={[styles.scrambleBanner, isCompact && styles.scrambleBannerCompact]}>
-            <Text style={styles.scrambleBannerText}>Scrambling...</Text>
+          {showPauseButton && (
             <TouchableOpacity
-              style={styles.skipButton}
-              onPress={skipScramble}
-              activeOpacity={0.7}
+              testID="pause-button"
+              style={[styles.pauseButton, isCompact && styles.pauseButtonCompact]}
+              onPress={handlePause}
               accessibilityRole="button"
-              accessibilityLabel="Skip scramble"
+              accessibilityLabel="Pause solve game"
+              activeOpacity={0.8}
             >
-              <Text style={styles.skipButtonText}>Skip</Text>
+              <Ionicons
+                name="pause"
+                size={isCompact ? 18 : 22}
+                color={colors.text.primary}
+              />
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
 
         <Text style={[styles.helpHint, isCompact && styles.helpHintCompact]}>
           Drag stickers to turn faces • Drag background to rotate freely (any angle)
         </Text>
       </View>
 
-      <View style={styles.bottomBar} pointerEvents="box-none">
-        <View style={[styles.buttonGroup, isCompact && styles.buttonGroupCompact]}>
-          <TouchableOpacity
-            style={[styles.button, styles.viewButton, isCompact && styles.buttonCompact, isShort && styles.buttonShort]}
-            onPress={handleToggleTopFace}
-          >
-            <View
-              style={[
-                styles.colorDot,
-                isCompact && styles.colorDotCompact,
-                { backgroundColor: isYellowTop ? '#FFFFFF' : '#FFD500' },
-              ]}
-            />
-            <Text style={[styles.buttonText, isCompact && styles.buttonTextCompact]}>
-              {isYellowTop ? 'White Top' : 'Yellow Top'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton, isCompact && styles.buttonCompact, isShort && styles.buttonShort]}
-            onPress={handleResetView}
-          >
-            <Text style={[styles.buttonText, isCompact && styles.buttonTextCompact]}>
-              Reset View
-            </Text>
-          </TouchableOpacity>
+      {showCenterControls && (
+        <View
+          testID="game-overlay-center-controls"
+          style={styles.centerContainer}
+          pointerEvents="box-none"
+        >
+          {actionButtons}
         </View>
-
-        <View style={[styles.buttonGroup, isCompact && styles.buttonGroupCompact, { marginTop: isShort ? 6 : (isCompact ? 8 : 10) }]}>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              isCompact && styles.buttonCompact,
-              isShort && styles.buttonShort,
-              gamePhase === 'SCRAMBLING' && styles.buttonDisabled,
-            ]}
-            onPress={handleScramble}
-            disabled={gamePhase === 'SCRAMBLING'}
-            accessibilityRole="button"
-            accessibilityLabel="Scramble cube"
-          >
-            <Text style={[styles.buttonText, isCompact && styles.buttonTextCompact]}>
-              {gamePhase === 'SCRAMBLING' ? 'Scrambling...' : 'Scramble'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton, isCompact && styles.buttonCompact, isShort && styles.buttonShort]}
-            onPress={resetGame}
-          >
-            <Text style={[styles.buttonText, isCompact && styles.buttonTextCompact]}>
-              Reset Game
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      )}
 
       <VictoryCard />
+      <RecordsModal />
+      <PauseModal />
     </View>
   );
 };
@@ -202,13 +254,22 @@ const styles = StyleSheet.create({
   titleShort: {
     fontSize: 18,
   },
+  statsRowWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    gap: 12,
+  },
+  statsRowWrapperCompact: {
+    marginTop: 4,
+    gap: 8,
+  },
   statsContainer: {
     flexDirection: 'row',
-    marginTop: 6,
     gap: 16,
   },
   statsContainerCompact: {
-    marginTop: 4,
     gap: 10,
   },
   hudBadge: {
@@ -217,16 +278,21 @@ const styles = StyleSheet.create({
   hudBadgeCompact: {
     minWidth: 90,
   },
-
-  statLabel: {
-    fontSize: 13,
-    color: '#A0A0A5',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    fontWeight: '600',
+  pauseButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(13, 30, 54, 0.85)',
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
   },
-  statLabelCompact: {
-    fontSize: 11,
+  pauseButtonCompact: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
   },
   helpHint: {
     fontSize: 12,
@@ -240,141 +306,66 @@ const styles = StyleSheet.create({
     marginTop: 4,
     maxWidth: 340,
   },
-  bottomBar: {
+  centerContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   buttonGroup: {
-    flexDirection: 'row',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
   },
   buttonGroupCompact: {
     gap: 8,
   },
   button: {
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    elevation: 2,
-  },
-  buttonCompact: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  buttonShort: {
-    paddingVertical: 6,
-  },
-  secondaryButton: {
-    backgroundColor: '#27272A',
-    borderWidth: 1,
-    borderColor: '#3F3F46',
-  },
-  viewButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#27272A',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    minWidth: 160,
+    elevation: 3,
+  },
+  buttonCompact: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    minWidth: 140,
+    borderRadius: 10,
+  },
+  buttonShort: {
+    paddingVertical: 7,
+  },
+  startButton: {
+    backgroundColor: colors.brand.cyan,
     borderWidth: 1,
-    borderColor: '#52525B',
+    borderColor: '#00E5FF',
   },
-  colorDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  startButtonText: {
+    color: '#070F1E',
+    fontWeight: '800',
   },
-  colorDotCompact: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  recordButton: {
+    backgroundColor: 'rgba(13, 30, 54, 0.92)',
+    borderWidth: 1.5,
+    borderColor: colors.brand.gold,
+  },
+  recordButtonText: {
+    color: colors.brand.gold,
+    fontWeight: '700',
   },
   buttonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    letterSpacing: 0.5,
   },
   buttonTextCompact: {
-    fontSize: 13,
+    fontSize: 14,
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  scrambleBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(13, 30, 54, 0.95)',
-    borderWidth: 1,
-    borderColor: colors.brand.cyan,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginTop: 10,
-    minWidth: 260,
-    maxWidth: 380,
-  },
-  scrambleBannerCompact: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 6,
-    minWidth: 220,
-    maxWidth: 320,
-  },
-  scrambleBannerText: {
-    color: '#00E5FF',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  skipButton: {
-    backgroundColor: '#FF8C00',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 6,
-    minHeight: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  skipButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  notationCard: {
-    backgroundColor: 'rgba(13, 30, 54, 0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginTop: 8,
-    maxWidth: 420,
-    alignItems: 'center',
-  },
-  notationCardCompact: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginTop: 4,
-    maxWidth: 320,
-  },
-  notationLabel: {
-    fontSize: 11,
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  notationText: {
-    color: '#F8FAFC',
-    fontSize: 13,
-    fontWeight: '500',
-    textAlign: 'center',
-    letterSpacing: 0.5,
-    lineHeight: 18,
-  },
-  notationTextCompact: {
-    fontSize: 11,
-    lineHeight: 15,
   },
 });

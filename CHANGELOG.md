@@ -30,11 +30,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Instant rematch and review options on the victory card to scramble again or dismiss the card and inspect the solved cube (see spec 0007).
 - Local display ticker hook updating live timer figures smoothly without triggering global store re renders (see spec 0007).
 - Move counter tracking legal face turns using the Half Turn Metric during timed solves (see spec 0007).
+- Top bar header pause button that appears during active play and hides when paused or idle (see spec 0009).
+- Darkened pause modal overlay displaying current elapsed solve duration, move count, and options to resume, restart, or return to the main page (see spec 0009).
+- Dedicated pause state in the cube store tracking segmented solve durations without time penalties while paused (see spec 0009).
+- Gesture lockout guarding cube orbit and face turns while the game is paused (see spec 0009).
+- Automatic pause lifecycle integration that freezes active solves when the app moves to the background or becomes inactive (see spec 0009).
+- Quick restart and exit actions allowing players to abandon an active solve attempt and trigger a fresh shuffle or return to the solved initial state (see spec 0009).
 
 ### Changed
 - Whole cube orbit rotation now maps screen swipes directly around world axes with exponential damping for smooth inspection (see spec 0005).
 - Scramble button in the overlay now initiates animated queue playback and temporarily disables to prevent conflicting turns (see spec 0006).
 - Top game overlay now displays live timer and move count badges in the head up display instead of text phase labels (see spec 0007).
+- Start and Record buttons now render centered on screen when the game is idle or solved, and hide completely during active play to give an unobstructed cube view (see spec 0009).
+- Solve timer ticker now computes elapsed duration from accumulated active segments so time spent paused is not counted (see spec 0009).
 
 ### Fixed
 - Scramble moves no longer count toward player solve moves or pollute move history.

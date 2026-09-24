@@ -18,6 +18,8 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 5 | 3D cube renderer and interaction | Slice 1 | done |
 | 6 | Scramble engine | Slice 2 | done |
 | 7 | Solve timer and move counter | Slice 3 | done |
+| 8 | EAS deployment and gameplay controls | Slice 4 | done |
+| 9 | Game pause and in game controls | Slice 4 | done |
 
 ## Foundations
 
@@ -113,11 +115,38 @@ Start timing when the player makes the first move after a scramble; stop and sho
 - [x] Verify it: `/check verify solve timer and move counter`
 - [x] Test it: `/test solve timer and move counter`
 
+## Slice 4: Deployment and records
+
+### 8. EAS deployment and gameplay controls · done
+Configure Expo Application Services cloud build metadata with Android preview APK profile, link app assets in app.json, modernize main game controls with Start and Record buttons, and track top five fastest solves using persistent local storage.
+**Done when:** app.json and eas.json build standalone Android APK files cleanly, main screen has only Start and Record buttons, tapping Start triggers a rapid 20 move shuffle with zero latency timer start, and Record presents top five saved records with empty state support.
+- [x] Design it (spec): `/architect EAS deployment and gameplay controls`
+  spec [0008](../specs/0008-eas-deployment-and-gameplay-controls/index.md) · code in `app.json`, `eas.json`, `src/`
+- [x] Build it: `/develop EAS deployment and gameplay controls`
+  - [x] Deployment metadata: app.json EAS project ID, asset image paths, and eas.json Android APK preview profile (AC-1, AC-2, AC-3)
+  - [x] Record logic and persistence: AsyncStorage storage layer with top five ranking, sorting, and tie breaking (AC-6, AC-8)
+  - [x] Store integration: rapid shuffle sequence, post animation timer activation, and solve record evaluation (AC-5, AC-6, AC-8)
+  - [x] Interface overhaul: streamlined Start and Record bottom HUD and RecordsModal leaderboard overlay (AC-4, AC-5, AC-7)
+- [x] Verify it: `/check verify EAS deployment and gameplay controls`
+- [x] Test it: `/test EAS deployment and gameplay controls`
+
+### 9. Game pause and in game controls · done
+Clean up in game UI by centering Start and Record buttons when idle, hiding them during active solves, providing a top header pause icon, and presenting a pause modal with Resume, Restart, and Main Page navigation.
+**Done when:** Start and Record buttons sit in the center when idle and disappear during active play, tapping pause freezes the timer and locks cube interactions, the pause modal provides functioning Resume, Restart, and Main Page actions, and backgrounding the app pauses the game.
+- [x] Design it (spec): `/architect game pause and in game controls`
+  spec [0009](../specs/0009-game-pause-and-in-game-controls/index.md) · code in `src/`
+- [x] Build it: `/develop game pause and in game controls`
+  - [x] Store state and actions: isPaused flag, timer segment tracking, pauseGame, resumeGame, restartGame, and exitToMainPage (AC-4, AC-6, AC-7, AC-8)
+  - [x] Timer and interaction guards: useTimerTicker pause handling, gesture lockout in CubeCanvas and CubeGroup (AC-4, AC-6)
+  - [x] User interface and overlays: PauseModal component and GameOverlay dynamic button layout with pause icon (AC-1, AC-2, AC-3, AC-5)
+  - [x] AppState lifecycle: auto pause when application transitions to background or inactive (AC-9)
+- [x] Verify it: `/check verify game pause and in game controls`
+- [x] Test it: `/test game pause and in game controls`
+
 ## Deferred
 Out of scope for the current build pass, kept so the plan stays honest.
 - **Undo and redo moves**: step back through move history · needs a decision
 - **Step-by-step hints**: show the player the next move toward the solution · needs a decision
-- **Personal best statistics**: track fastest solve and fewest moves · needs a decision
 - **Settings screen**: color themes, animation speed · needs a decision
 - **iOS support**: Expo makes this straightforward once Android works · needs a decision
 - **2x2 and 4x4 cubes**: additional cube sizes · needs a decision

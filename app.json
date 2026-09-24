@@ -7,11 +7,21 @@
     "scheme": "magiccube",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "icon": "./assets/App-icon.png",
+    "splash": {
+      "image": "./assets/splash-screen.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#070F1E"
+    },
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "package": "com.magiccube.app"
+      "package": "com.magiccube.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/Android-adaptive-icon.png",
+        "backgroundImage": "./assets/Adaptive-Background.png"
+      }
     },
     "web": {
       "bundler": "metro",
@@ -21,6 +31,11 @@
       "expo-router",
       "expo-asset",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1400895d-0d5f-43ce-b82c-a40040de8a5b"
+      }
+    }
   }
 }

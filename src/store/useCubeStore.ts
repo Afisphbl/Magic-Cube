@@ -17,8 +17,14 @@ import {
 import { generateScramble, formatScrambleNotation } from '../logic/scramble';
 import { triggerHapticFeedback, triggerVictoryHaptic } from '../logic/haptics';
 import { TimerStatus, SolveRecord, createSolveRecord } from '../logic/timer';
+import {
+  TopRecord,
+  insertTopRecord,
+  loadStoredRecords,
+  saveStoredRecords,
+} from '../logic/records';
 
-export type { GamePhase, MoveName, BaseMove, MoveAnimationInfo, CubeValidationResult, TimerStatus, SolveRecord };
+export type { GamePhase, MoveName, BaseMove, MoveAnimationInfo, CubeValidationResult, TimerStatus, SolveRecord, TopRecord };
 export { createSolvedCubeState, validateCubeState, isCubeSolved, ALL_MOVE_NAMES, CUBE_FACE_COLORS, FACE_COLORS, PLASTIC_COLOR };
 
 export type OrientationPreset = 'yellow-top' | 'white-top' | 'reset';
@@ -55,6 +61,11 @@ export interface CubeStoreState {
   latestScramble: MoveName[];
   scrambleNotation: string;
   viewPresetTrigger: ViewPresetTrigger | null;
+  topRecords: TopRecord[];
+  isRecordsModalVisible: boolean;
+  isAutoStartOnScrambleFinish: boolean;
+  isPaused: boolean;
+  accumulatedTimeMs: number;
 
   setCubeState: (state: number[]) => void;
   setTimerMs: (ms: number) => void;
@@ -68,6 +79,17 @@ export interface CubeStoreState {
   updateTimer: (now?: number) => void;
   resetTimer: () => void;
   dismissVictoryCard: () => void;
+
+  startSolveGame: () => void;
+  openRecordsModal: () => void;
+  closeRecordsModal: () => void;
+  loadTopRecords: () => Promise<void>;
+  recordSolveAttempt: (record: SolveRecord) => Promise<boolean>;
+
+  pauseGame: () => void;
+  resumeGame: () => void;
+  restartGame: () => void;
+  exitToMainPage: () => void;
 
   requestMove: (move: MoveName) => boolean;
   applyMoveDirect: (move: MoveName) => void;
@@ -83,6 +105,10 @@ export interface CubeStoreState {
 
 
 function applyDirectMoveState(state: CubeStoreState, move: MoveName): Partial<CubeStoreState> {
+  if (state.isPaused) {
+    return state;
+  }
+
   const nextCubeState = applyMove(state.cubeState, move);
   const solved = isCubeSolved(nextCubeState);
   const nextPhase = getNextGamePhase(state.gamePhase, solved, false, false);
@@ -106,11 +132,14 @@ function applyDirectMoveState(state: CubeStoreState, move: MoveName): Partial<Cu
     timerMs = 0;
   }
 
+  let nextTopRecords = state.topRecords;
+
   // If timer was RUNNING and cube is solved, stop timer and record
   if (solved && (state.timerStatus === 'RUNNING' || timerStatus === 'RUNNING')) {
     const endTime = Date.now();
     const startTime = solveStartTime ?? endTime;
-    timerMs = Math.max(0, endTime - startTime);
+    const activeSegment = Math.max(0, endTime - startTime);
+    timerMs = state.accumulatedTimeMs + activeSegment;
     solveEndTime = endTime;
     timerStatus = 'STOPPED';
     latestSolve = createSolveRecord({
@@ -119,6 +148,12 @@ function applyDirectMoveState(state: CubeStoreState, move: MoveName): Partial<Cu
       scrambleNotation: state.scrambleNotation,
     });
     triggerVictoryHaptic();
+
+    const recordResult = insertTopRecord(state.topRecords, latestSolve);
+    if (recordResult.qualified) {
+      nextTopRecords = recordResult.updatedRecords;
+      saveStoredRecords(nextTopRecords);
+    }
   }
 
   return {
@@ -131,10 +166,11 @@ function applyDirectMoveState(state: CubeStoreState, move: MoveName): Partial<Cu
     solveEndTime,
     timerMs,
     latestSolve,
+    topRecords: nextTopRecords,
   };
 }
 
-export const useCubeStore = create<CubeStoreState>((set) => ({
+export const useCubeStore = create<CubeStoreState>((set, get) => ({
   cubeState: createSolvedCubeState(),
   timerMs: 0,
   timerStatus: 'IDLE',
@@ -152,6 +188,11 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
   latestScramble: [],
   scrambleNotation: '',
   viewPresetTrigger: null,
+  topRecords: [],
+  isRecordsModalVisible: false,
+  isAutoStartOnScrambleFinish: false,
+  isPaused: false,
+  accumulatedTimeMs: 0,
 
   setCubeState: (cubeState) => {
     const validation = validateCubeState(cubeState);
@@ -185,6 +226,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
           solveStartTime: Date.now(),
           solveEndTime: null,
           timerMs: 0,
+          accumulatedTimeMs: 0,
+          isPaused: false,
           isVictoryDismissed: false,
         };
       }
@@ -201,18 +244,30 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       }
       const endTime = Date.now();
       const startTime = state.solveStartTime ?? endTime;
-      const timeMs = Math.max(0, endTime - startTime);
+      const activeSegment = Math.max(0, endTime - startTime);
+      const timeMs = state.accumulatedTimeMs + activeSegment;
       createdRecord = createSolveRecord({
         timeMs,
         moveCount: state.moveCount,
         scrambleNotation: state.scrambleNotation,
       });
+
+      let nextTopRecords = state.topRecords;
+      if (createdRecord) {
+        const result = insertTopRecord(state.topRecords, createdRecord);
+        if (result.qualified) {
+          nextTopRecords = result.updatedRecords;
+          saveStoredRecords(nextTopRecords);
+        }
+      }
+
       return {
         timerStatus: 'STOPPED',
         solveEndTime: endTime,
         timerMs: timeMs,
         latestSolve: createdRecord,
         isVictoryDismissed: false,
+        topRecords: nextTopRecords,
       };
     });
     return createdRecord;
@@ -224,8 +279,9 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
         return state;
       }
       const current = now ?? Date.now();
+      const activeSegment = Math.max(0, current - state.solveStartTime);
       return {
-        timerMs: Math.max(0, current - state.solveStartTime),
+        timerMs: state.accumulatedTimeMs + activeSegment,
       };
     });
   },
@@ -236,12 +292,80 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       solveStartTime: null,
       solveEndTime: null,
       timerMs: 0,
+      accumulatedTimeMs: 0,
+      isPaused: false,
       isVictoryDismissed: false,
     });
   },
 
   dismissVictoryCard: () => {
     set({ isVictoryDismissed: true });
+  },
+
+  startSolveGame: () => {
+    set((state) => {
+      if (state.gamePhase === 'SCRAMBLING') {
+        return state;
+      }
+
+      const moves = generateScramble(20);
+      const notation = formatScrambleNotation(moves);
+      const [firstMove, ...restMoves] = moves;
+      const info = getMoveAnimationInfo(firstMove, 50);
+
+      triggerHapticFeedback();
+
+      return {
+        cubeState: createSolvedCubeState(),
+        timerMs: 0,
+        accumulatedTimeMs: 0,
+        isPaused: false,
+        timerStatus: 'IDLE',
+        solveStartTime: null,
+        solveEndTime: null,
+        latestSolve: null,
+        isVictoryDismissed: false,
+        moveCount: 0,
+        moveHistory: [],
+        gamePhase: 'SCRAMBLING',
+        latestScramble: moves,
+        scrambleNotation: notation,
+        scrambleQueue: restMoves,
+        pendingMove: null,
+        isAnimating: true,
+        isAutoStartOnScrambleFinish: true,
+        animatingMove: {
+          move: firstMove,
+          axis: info.axis,
+          targetAngle: info.angle,
+          durationMs: 50,
+          easing: info.easing,
+          filter: info.filter,
+        },
+      };
+    });
+  },
+
+  openRecordsModal: () => set({ isRecordsModalVisible: true }),
+  closeRecordsModal: () => set({ isRecordsModalVisible: false }),
+
+  loadTopRecords: async () => {
+    const records = await loadStoredRecords();
+    set({ topRecords: records });
+  },
+
+  recordSolveAttempt: async (record: SolveRecord) => {
+    let qualified = false;
+    set((state) => {
+      const result = insertTopRecord(state.topRecords, record);
+      if (result.qualified) {
+        qualified = true;
+        saveStoredRecords(result.updatedRecords);
+        return { topRecords: result.updatedRecords };
+      }
+      return state;
+    });
+    return qualified;
   },
 
 
@@ -256,7 +380,7 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
   requestMove: (move: MoveName) => {
     let accepted = false;
     set((state) => {
-      if (state.gamePhase === 'SCRAMBLING') {
+      if (state.isPaused || state.gamePhase === 'SCRAMBLING') {
         accepted = false;
         return state;
       }
@@ -292,6 +416,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
               solveStartTime: Date.now(),
               solveEndTime: null,
               timerMs: 0,
+              accumulatedTimeMs: 0,
+              isPaused: false,
               isVictoryDismissed: false,
             }
           : {}),
@@ -302,7 +428,7 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
 
   startMoveAnimation: (move: MoveName) => {
     set((state) => {
-      if (state.isAnimating) return state;
+      if (state.isPaused || state.isAnimating) return state;
       const info = getMoveAnimationInfo(move);
       const shouldStartTimer =
         state.timerStatus === 'IDLE' &&
@@ -325,6 +451,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
               solveStartTime: Date.now(),
               solveEndTime: null,
               timerMs: 0,
+              accumulatedTimeMs: 0,
+              isPaused: false,
               isVictoryDismissed: false,
             }
           : {}),
@@ -347,6 +475,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       set({
         cubeState: createSolvedCubeState(),
         timerMs: 0,
+        accumulatedTimeMs: 0,
+        isPaused: false,
         timerStatus: 'IDLE',
         solveStartTime: null,
         solveEndTime: null,
@@ -371,6 +501,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
     set({
       cubeState: createSolvedCubeState(),
       timerMs: 0,
+      accumulatedTimeMs: 0,
+      isPaused: false,
       timerStatus: 'IDLE',
       solveStartTime: null,
       solveEndTime: null,
@@ -384,6 +516,7 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       scrambleQueue: restMoves,
       pendingMove: null,
       isAnimating: true,
+      isAutoStartOnScrambleFinish: false,
       animatingMove: {
         move: firstMove,
         axis: info.axis,
@@ -419,6 +552,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
         moveHistory: [],
         gamePhase: 'PLAYING',
         timerMs: 0,
+        accumulatedTimeMs: 0,
+        isPaused: false,
         timerStatus: 'IDLE',
         solveStartTime: null,
         solveEndTime: null,
@@ -428,6 +563,7 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
         animatingMove: null,
         pendingMove: null,
         scrambleQueue: [],
+        isAutoStartOnScrambleFinish: false,
       };
     });
   },
@@ -437,6 +573,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       set((state) => ({
         gamePhase: isCubeSolved(state.cubeState) ? 'SOLVED' : 'PLAYING',
         timerMs: 0,
+        accumulatedTimeMs: 0,
+        isPaused: false,
         timerStatus: 'IDLE',
         solveStartTime: null,
         solveEndTime: null,
@@ -455,6 +593,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
     set({
       gamePhase: 'SCRAMBLING',
       timerMs: 0,
+      accumulatedTimeMs: 0,
+      isPaused: false,
       timerStatus: 'IDLE',
       solveStartTime: null,
       solveEndTime: null,
@@ -489,10 +629,11 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       const nextCount = isScrambleMove ? state.moveCount : state.moveCount + 1;
       const nextHistory = isScrambleMove ? state.moveHistory : [...state.moveHistory, completedMove];
 
-      // If active scramble moves are queued, chain immediately with 70ms duration
+      // If active scramble moves are queued, chain immediately with active duration
       if (state.scrambleQueue.length > 0) {
         const [nextMove, ...remainingScramble] = state.scrambleQueue;
-        const nextInfo = getMoveAnimationInfo(nextMove, 70);
+        const durationMs = state.animatingMove?.durationMs ?? 70;
+        const nextInfo = getMoveAnimationInfo(nextMove, durationMs);
         return {
           cubeState: nextCubeState,
           moveCount: nextCount,
@@ -503,7 +644,7 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
             move: nextMove,
             axis: nextInfo.axis,
             targetAngle: nextInfo.angle,
-            durationMs: 70,
+            durationMs,
             easing: nextInfo.easing,
             filter: nextInfo.filter,
           },
@@ -513,6 +654,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       // If scramble finished normally (scrambleQueue drained)
       if (isScrambleMove) {
         triggerHapticFeedback();
+        const autoStart = state.isAutoStartOnScrambleFinish;
+        const now = Date.now();
         return {
           cubeState: nextCubeState,
           moveCount: 0,
@@ -521,13 +664,16 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
           animatingMove: null,
           pendingMove: null,
           scrambleQueue: [],
-          gamePhase: isCubeSolved(nextCubeState) ? 'SOLVED' : 'PLAYING',
-          timerStatus: 'IDLE',
-          solveStartTime: null,
+          gamePhase: autoStart ? 'PLAYING' : (isCubeSolved(nextCubeState) ? 'SOLVED' : 'PLAYING'),
+          timerStatus: autoStart ? 'RUNNING' : 'IDLE',
+          solveStartTime: autoStart ? now : null,
           solveEndTime: null,
           timerMs: 0,
+          accumulatedTimeMs: 0,
+          isPaused: false,
           latestSolve: null,
           isVictoryDismissed: false,
+          isAutoStartOnScrambleFinish: false,
         };
       }
 
@@ -560,11 +706,13 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       let solveEndTime = state.solveEndTime;
       let timerMs = state.timerMs;
       let latestSolve = state.latestSolve;
+      let nextTopRecords = state.topRecords;
 
       if (solved && state.timerStatus === 'RUNNING') {
         const endTime = Date.now();
         const startTime = state.solveStartTime ?? endTime;
-        timerMs = Math.max(0, endTime - startTime);
+        const activeSegment = Math.max(0, endTime - startTime);
+        timerMs = state.accumulatedTimeMs + activeSegment;
         solveEndTime = endTime;
         timerStatus = 'STOPPED';
         latestSolve = createSolveRecord({
@@ -573,6 +721,12 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
           scrambleNotation: state.scrambleNotation,
         });
         triggerVictoryHaptic();
+
+        const recordResult = insertTopRecord(state.topRecords, latestSolve);
+        if (recordResult.qualified) {
+          nextTopRecords = recordResult.updatedRecords;
+          saveStoredRecords(nextTopRecords);
+        }
       }
 
       return {
@@ -588,7 +742,72 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
         solveEndTime,
         timerMs,
         latestSolve,
+        topRecords: nextTopRecords,
       };
+    });
+  },
+
+  pauseGame: () => {
+    set((state) => {
+      if (state.gamePhase !== 'PLAYING' || state.timerStatus !== 'RUNNING' || state.isPaused) {
+        return state;
+      }
+      const now = Date.now();
+      const activeSegment = state.solveStartTime !== null ? Math.max(0, now - state.solveStartTime) : 0;
+      const nextAccumulated = state.accumulatedTimeMs + activeSegment;
+
+      return {
+        isPaused: true,
+        timerStatus: 'PAUSED',
+        accumulatedTimeMs: nextAccumulated,
+        timerMs: nextAccumulated,
+        solveStartTime: null,
+      };
+    });
+  },
+
+  resumeGame: () => {
+    set((state) => {
+      if (!state.isPaused) {
+        return state;
+      }
+      return {
+        isPaused: false,
+        timerStatus: 'RUNNING',
+        solveStartTime: Date.now(),
+      };
+    });
+  },
+
+  restartGame: () => {
+    set({
+      isPaused: false,
+      accumulatedTimeMs: 0,
+    });
+    get().startSolveGame();
+  },
+
+  exitToMainPage: () => {
+    set({
+      cubeState: createSolvedCubeState(),
+      timerMs: 0,
+      accumulatedTimeMs: 0,
+      timerStatus: 'IDLE',
+      solveStartTime: null,
+      solveEndTime: null,
+      latestSolve: null,
+      isVictoryDismissed: false,
+      isPaused: false,
+      moveCount: 0,
+      moveHistory: [],
+      gamePhase: 'SOLVED',
+      isAnimating: false,
+      animatingMove: null,
+      pendingMove: null,
+      scrambleQueue: [],
+      latestScramble: [],
+      scrambleNotation: '',
+      isAutoStartOnScrambleFinish: false,
     });
   },
 
@@ -596,6 +815,8 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
     set({
       cubeState: createSolvedCubeState(),
       timerMs: 0,
+      accumulatedTimeMs: 0,
+      isPaused: false,
       timerStatus: 'IDLE',
       solveStartTime: null,
       solveEndTime: null,
@@ -610,6 +831,7 @@ export const useCubeStore = create<CubeStoreState>((set) => ({
       scrambleQueue: [],
       latestScramble: [],
       scrambleNotation: '',
+      isAutoStartOnScrambleFinish: false,
     });
   },
 }));

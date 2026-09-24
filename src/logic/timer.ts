@@ -1,4 +1,4 @@
-export type TimerStatus = 'IDLE' | 'RUNNING' | 'STOPPED';
+export type TimerStatus = 'IDLE' | 'RUNNING' | 'PAUSED' | 'STOPPED';
 
 export interface SolveRecord {
   id: string;

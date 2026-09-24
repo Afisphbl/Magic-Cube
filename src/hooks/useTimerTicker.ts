@@ -14,6 +14,8 @@ export function useTimerTicker(): string {
   const solveStartTime = useCubeStore((state) => state.solveStartTime);
   const solveEndTime = useCubeStore((state) => state.solveEndTime);
   const timerMs = useCubeStore((state) => state.timerMs);
+  const accumulatedTimeMs = useCubeStore((state) => state.accumulatedTimeMs);
+  const isPaused = useCubeStore((state) => state.isPaused);
   const latestSolve = useCubeStore((state) => state.latestSolve);
 
   const [displayText, setDisplayText] = useState<string>(() => {
@@ -22,8 +24,11 @@ export function useTimerTicker(): string {
       const ms = latestSolve?.timeMs ?? (solveEndTime && solveStartTime ? solveEndTime - solveStartTime : timerMs);
       return formatTimer(ms);
     }
+    if (timerStatus === 'PAUSED' || isPaused) {
+      return formatTimer(accumulatedTimeMs);
+    }
     if (timerStatus === 'RUNNING' && solveStartTime !== null) {
-      return formatTimer(Math.max(0, Date.now() - solveStartTime));
+      return formatTimer(accumulatedTimeMs + Math.max(0, Date.now() - solveStartTime));
     }
     return '0.00';
   });
@@ -40,9 +45,14 @@ export function useTimerTicker(): string {
       return;
     }
 
+    if (timerStatus === 'PAUSED' || isPaused) {
+      setDisplayText(formatTimer(accumulatedTimeMs));
+      return;
+    }
+
     if (timerStatus === 'RUNNING' && solveStartTime !== null) {
       const update = () => {
-        const elapsed = Math.max(0, Date.now() - solveStartTime);
+        const elapsed = accumulatedTimeMs + Math.max(0, Date.now() - solveStartTime);
         setDisplayText(formatTimer(elapsed));
       };
 
@@ -53,7 +63,7 @@ export function useTimerTicker(): string {
         clearInterval(intervalId);
       };
     }
-  }, [timerStatus, solveStartTime, solveEndTime, timerMs, latestSolve]);
+  }, [timerStatus, solveStartTime, solveEndTime, timerMs, accumulatedTimeMs, isPaused, latestSolve]);
 
   return displayText;
 }

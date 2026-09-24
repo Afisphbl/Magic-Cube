@@ -147,19 +147,18 @@ test('AC-4: GameOverlay renders active running timer and custom move count', () 
   assert.ok(html.includes('42'), 'Must display updated move count');
 });
 
-test('AC-4: GameOverlay renders Scrambling banner with Skip button during SCRAMBLING phase', () => {
+test('AC-4: GameOverlay renders Shuffling state during SCRAMBLING phase', () => {
   const html = renderToStaticMarkup(
     React.createElement(GameOverlay, {
       gamePhase: 'SCRAMBLING',
     })
   );
 
-  assert.ok(html.includes('Scrambling...'), 'Must render scrambling banner text');
-  assert.ok(html.includes('Skip'), 'Must render Skip button');
-  assert.ok(html.includes('aria-label="Skip scramble"'), 'Skip button must have accessible label');
+  assert.ok(html.includes('Shuffling...'), 'Must render shuffling status on Start button');
+  assert.ok(html.includes('aria-label="Start solve game"'), 'Start button must have accessible label');
 });
 
-test('AC-4: GameOverlay renders control and orientation buttons', () => {
+test('AC-4: GameOverlay renders streamlined Start and Record buttons', () => {
   const html = renderToStaticMarkup(
     React.createElement(GameOverlay, {
       moveCount: 0,
@@ -167,8 +166,37 @@ test('AC-4: GameOverlay renders control and orientation buttons', () => {
     })
   );
 
-  assert.ok(html.includes('Yellow Top'), 'Must render default orientation preset');
-  assert.ok(html.includes('Reset View'), 'Must render Reset View button');
-  assert.ok(html.includes('Scramble'), 'Must render Scramble button');
-  assert.ok(html.includes('Reset Game'), 'Must render Reset Game button');
+  assert.ok(html.includes('Start'), 'Must render Start button');
+  assert.ok(html.includes('Record'), 'Must render Record button');
+  assert.ok(html.indexOf('Start') < html.indexOf('Record'), 'Start button must precede Record button in vertical hierarchy');
+  assert.ok(html.includes('aria-label="Start solve game"'), 'Start button must have accessible label');
+  assert.ok(html.includes('aria-label="View solve records"'), 'Record button must have accessible label');
+  assert.ok(!html.includes('Yellow Top'), 'Must not render obsolete Yellow Top button');
+  assert.ok(!html.includes('Reset View'), 'Must not render obsolete Reset View button');
+  assert.ok(!html.includes('Reset Game'), 'Must not render obsolete Reset Game button');
 });
+
+test('AC-1, AC-2: GameOverlay renders centered controls when not playing and hides controls when playing', () => {
+  const notPlayingHtml = renderToStaticMarkup(
+    React.createElement(GameOverlay, {
+      gamePhase: 'SOLVED',
+      timerStatus: 'IDLE',
+    })
+  );
+  assert.ok(
+    notPlayingHtml.includes('game-overlay-center-controls'),
+    'Must render in center container when not playing'
+  );
+
+  const playingHtml = renderToStaticMarkup(
+    React.createElement(GameOverlay, {
+      gamePhase: 'PLAYING',
+      timerStatus: 'RUNNING',
+    })
+  );
+  assert.ok(
+    !playingHtml.includes('game-overlay-center-controls'),
+    'Must hide center container when playing'
+  );
+});
+
