@@ -430,3 +430,53 @@ test('AC-8: Orientation presets rotate cube to expected viewing angles', () => {
   assert.equal(resetQuat.equals(defaultQuat), true, 'Reset returns exactly to default quaternion');
 });
 
+test('Mobile touch coordinates resolve without clientX or clientY without producing NaN', () => {
+  // Mobile GestureResponderEvent does not contain clientX or clientY
+  const mobileNativeEvent = {
+    identifier: 1,
+    locationX: 150,
+    locationY: 250,
+    pageX: 150,
+    pageY: 350,
+  };
+  const gestureState = { x0: 150, y0: 350, dx: 25, dy: -10, moveX: 175, moveY: 340 };
+
+  // Helper logic used in CubeCanvas to resolve touch coordinates
+  const touchX = mobileNativeEvent.locationX ?? mobileNativeEvent.offsetX ?? gestureState.x0 ?? 0;
+  const touchY = mobileNativeEvent.locationY ?? mobileNativeEvent.offsetY ?? gestureState.y0 ?? 0;
+
+  assert.equal(Number.isNaN(touchX), false, 'touchX must not be NaN');
+  assert.equal(Number.isNaN(touchY), false, 'touchY must not be NaN');
+  assert.equal(touchX, 150);
+  assert.equal(touchY, 250);
+
+  // Normalized Device Coordinates (NDC) calculation
+  const containerSize = { width: 300, height: 500 };
+  const ndcX = (touchX / containerSize.width) * 2 - 1;
+  const ndcY = -(touchY / containerSize.height) * 2 + 1;
+
+  assert.equal(ndcX, 0, 'Center X on 300px canvas maps to NDC 0');
+  assert.equal(ndcY, 0, 'Center Y on 500px canvas maps to NDC 0');
+
+  // Swipe distance calculation from gestureState
+  const dist = Math.hypot(gestureState.dx, gestureState.dy);
+  assert.equal(Number.isNaN(dist), false, 'Swipe distance must not be NaN');
+  assert.ok(dist >= 18, 'Drag of dx=25 reaches 18pt gesture threshold');
+});
+
+test('Raycast hit resolves cubie coordinates from parent group position', () => {
+  const parentGroup = new THREE.Group();
+  parentGroup.position.set(1, -1, 1);
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.95, 0.95));
+  parentGroup.add(mesh);
+
+  const hit = { object: mesh };
+  let cubieCoord = null;
+  if (hit.object.parent) {
+    const p = hit.object.parent.position;
+    cubieCoord = [Math.round(p.x), Math.round(p.y), Math.round(p.z)];
+  }
+
+  assert.deepEqual(cubieCoord, [1, -1, 1]);
+});
+

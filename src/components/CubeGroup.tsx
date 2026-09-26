@@ -17,6 +17,7 @@ for (const x of [-1, 0, 1]) {
 
 interface CubeGroupProps {
   targetQuaternion: THREE.Quaternion | React.RefObject<THREE.Quaternion>;
+  groupRef?: React.RefObject<THREE.Group | null>;
   onCubiePointerDown?: (
     e: ThreeEvent<PointerEvent>,
     coords: [number, number, number],
@@ -31,9 +32,11 @@ function easeInOutCubic(t: number): number {
 
 export const CubeGroup: React.FC<CubeGroupProps> = ({
   targetQuaternion,
+  groupRef: externalGroupRef,
   onCubiePointerDown,
 }) => {
-  const groupRef = useRef<THREE.Group>(null);
+  const internalGroupRef = useRef<THREE.Group>(null);
+  const groupRef = externalGroupRef || internalGroupRef;
   const cubieRefs = useRef<(THREE.Group | null)[]>([]);
 
   const cubeState = useCubeStore((state) => state.cubeState);
