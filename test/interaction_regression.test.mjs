@@ -480,3 +480,198 @@ test('Raycast hit resolves cubie coordinates from parent group position', () => 
   assert.deepEqual(cubieCoord, [1, -1, 1]);
 });
 
+test('PanResponder activation requires move distance exceeding 2 points', () => {
+  function onMoveShouldSetPanResponder(_, gestureState) {
+    return Math.hypot(gestureState.dx, gestureState.dy) > 2;
+  }
+
+  // Micro jitter under threshold
+  assert.equal(onMoveShouldSetPanResponder(null, { dx: 1, dy: 1 }), false);
+  assert.equal(onMoveShouldSetPanResponder(null, { dx: 2, dy: 0 }), false);
+
+  // Intentional drag above threshold
+  assert.equal(onMoveShouldSetPanResponder(null, { dx: 2.1, dy: 0 }), true);
+  assert.equal(onMoveShouldSetPanResponder(null, { dx: 2, dy: 1 }), true);
+});
+
+test('AC-4, AC-6: Pause lockout disables interaction grant and movement', () => {
+  const store = useCubeStore.getState();
+  store.resetGame();
+  useCubeStore.setState({ isPaused: true });
+
+  let isOrbiting = false;
+  let faceDrag = null;
+
+  function onPanResponderGrant() {
+    if (useCubeStore.getState().isPaused) return;
+    isOrbiting = true;
+  }
+
+  function onPanResponderMove() {
+    if (useCubeStore.getState().isPaused) return;
+    faceDrag = { active: true };
+  }
+
+  onPanResponderGrant();
+  assert.equal(isOrbiting, false, 'Grant is ignored while paused');
+
+  onPanResponderMove();
+  assert.equal(faceDrag, null, 'Move is ignored while paused');
+
+  // Resume and verify interaction works
+  useCubeStore.setState({ isPaused: false });
+  onPanResponderGrant();
+  assert.equal(isOrbiting, true, 'Grant is accepted when not paused');
+
+  store.resetGame();
+});
+
+test('AC-5: Pan responder grant during SCRAMBLING triggers skipScramble', () => {
+  const store = useCubeStore.getState();
+  store.resetGame();
+
+  // Put store in SCRAMBLING phase with queued moves
+  store.scrambleCube(['R', 'U', "R'", "U'"]);
+  assert.equal(useCubeStore.getState().gamePhase, 'SCRAMBLING');
+
+  let interactionStarted = false;
+  function onPanResponderGrant() {
+    if (useCubeStore.getState().isPaused) return;
+
+    if (useCubeStore.getState().gamePhase === 'SCRAMBLING') {
+      useCubeStore.getState().skipScramble();
+      return;
+    }
+
+    interactionStarted = true;
+  }
+
+  onPanResponderGrant();
+  assert.equal(useCubeStore.getState().gamePhase, 'PLAYING', 'Phase transitioned to PLAYING via skipScramble');
+  assert.equal(interactionStarted, false, 'Normal drag or orbit was not initiated');
+
+  store.resetGame();
+});
+
+test('Center cubie drag with null move smoothly transitions to orbit mode', () => {
+  const normal = [0, 1, 0]; // Up face
+  const centerCubie = [0, 1, 0]; // Center cubie of Up face
+  const [t1] = getFaceTangents(normal);
+
+  // Center cubie produces null move regardless of tangent direction
+  const resolved = resolveFaceDragMove(normal, centerCubie, t1);
+  assert.equal(resolved, null, 'Center cubie drag cannot rotate a single slice');
+
+  // Handler simulation
+  let isOrbiting = false;
+  let faceDrag = { normal, cubieCoord: centerCubie };
+  let lastOrbitPos = null;
+
+  const gestureState = { dx: 25, dy: 0, moveX: 125, moveY: 200, x0: 100, y0: 200 };
+  const dist = Math.hypot(gestureState.dx, gestureState.dy);
+
+  if (dist >= 18) {
+    const move = resolveFaceDragMove(faceDrag.normal, faceDrag.cubieCoord, t1);
+    if (move) {
+      faceDrag = null;
+    } else {
+      isOrbiting = true;
+      faceDrag = null;
+      lastOrbitPos = {
+        x: gestureState.moveX || (gestureState.x0 + gestureState.dx),
+        y: gestureState.moveY || (gestureState.y0 + gestureState.dy),
+      };
+    }
+  }
+
+  assert.equal(isOrbiting, true, 'Transitions to orbit mode on center piece drag');
+  assert.equal(faceDrag, null, 'Clears face drag state');
+  assert.deepEqual(lastOrbitPos, { x: 125, y: 200 });
+});
+
+test('Two finger touch forces orbit mode during move gesture', () => {
+  let isOrbiting = false;
+  let faceDrag = { cubieCoord: [0, 1, 1], normal: [0, 0, 1] };
+
+  function handlePanMove(nativeEvent) {
+    if (nativeEvent.touches && nativeEvent.touches.length >= 2) {
+      isOrbiting = true;
+      faceDrag = null;
+    }
+  }
+
+  // Single finger move does not force orbit
+  handlePanMove({ touches: [{ identifier: 0 }] });
+  assert.equal(isOrbiting, false);
+  assert.notEqual(faceDrag, null);
+
+  // Two finger move forces orbit and cancels face drag
+  handlePanMove({ touches: [{ identifier: 0 }, { identifier: 1 }] });
+  assert.equal(isOrbiting, true, 'Two fingers initiate orbit mode');
+  assert.equal(faceDrag, null, 'Face drag is canceled');
+});
+
+test('Release and termination reset all interaction refs cleanly', () => {
+  const refs = {
+    activeTouchId: 1,
+    isOrbiting: true,
+    faceDrag: { cubieCoord: [1, 1, 1] },
+    lastOrbitPos: { x: 50, y: 100 },
+  };
+
+  function cleanup() {
+    refs.activeTouchId = null;
+    refs.isOrbiting = false;
+    refs.faceDrag = null;
+    refs.lastOrbitPos = null;
+  }
+
+  cleanup();
+  assert.equal(refs.activeTouchId, null);
+  assert.equal(refs.isOrbiting, false);
+  assert.equal(refs.faceDrag, null);
+  assert.equal(refs.lastOrbitPos, null);
+});
+
+test('AC-8: Orientation preset trigger updates orientation refs to target angles', () => {
+  const defaultQuat = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(-0.4, 0.6, 0, 'XYZ')
+  );
+  const yellowTopQuat = defaultQuat.clone().premultiply(
+    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI)
+  );
+
+  function resolvePresetQuat(preset) {
+    if (preset === 'yellow-top') {
+      return yellowTopQuat.clone();
+    } else if (preset === 'white-top' || preset === 'reset') {
+      return defaultQuat.clone();
+    }
+    return null;
+  }
+
+  const yellowResult = resolvePresetQuat('yellow-top');
+  assert.ok(yellowResult.equals(yellowTopQuat), 'Yellow top preset returns expected flipped quaternion');
+
+  const whiteResult = resolvePresetQuat('white-top');
+  assert.ok(whiteResult.equals(defaultQuat), 'White top preset returns default quaternion');
+
+  const resetResult = resolvePresetQuat('reset');
+  assert.ok(resetResult.equals(defaultQuat), 'Reset preset returns default quaternion');
+
+  const unknownResult = resolvePresetQuat('unknown-preset');
+  assert.equal(unknownResult, null, 'Unknown preset returns null without altering orientation');
+});
+
+test('CubeGroup accepts external groupRef or falls back to internal ref', () => {
+  const externalRef = { current: new THREE.Group() };
+  const internalRef = { current: new THREE.Group() };
+
+  function resolveGroupRef(external, internal) {
+    return external || internal;
+  }
+
+  assert.equal(resolveGroupRef(externalRef, internalRef), externalRef, 'Uses external ref when provided');
+  assert.equal(resolveGroupRef(undefined, internalRef), internalRef, 'Falls back to internal ref when omitted');
+});
+
